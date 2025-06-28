@@ -1,206 +1,208 @@
-#include <vamp/bindings/common.hh>
-#include <vamp/bindings/init.hh>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
+#include <nanobind/stl/array.h>
+#include <nanobind/stl/unique_ptr.h>
+#include <nanobind/stl/shared_ptr.h>
+
 #include <vamp/mr_planning/mr_problem.hh>
 #include <vamp/mr_planning/mr_settings.hh>
 #include <vamp/mr_planning/mr_planner_base.hh>
 #include <vamp/mr_planning/dummy_mr_planner.hh>
 #include <vamp/mr_planning/mr_factory.hh>
-#include <vamp/robots/panda_grid.hh>
-#include <vamp/random/halton.hh>
 #include <vamp/collision/environment.hh>
+#include <vamp/random/rng.hh>
+#include <vamp/random/halton.hh>
+#include <vamp/vector.hh>
 
 namespace nb = nanobind;
 
-void vamp::binding::init_mr_planning(nb::module_ &pymodule)
+using namespace vamp::mr_planning;
+
+// Type aliases for Python bindings
+using MRPlanner = MRPlannerBase<4, 4>;
+using DummyPlanner = DummyMRPlanner<4, 4>;
+using Environment = vamp::collision::Environment<float>;
+using RNG = vamp::rng::RNG<7>;
+using HaltonRNG = vamp::rng::Halton<7>;
+using FloatVector7 = vamp::FloatVector<7>;
+
+namespace vamp::binding
 {
-    using namespace vamp::mr_planning;
-    using Robot = vamp::robots::Panda_0_0;  // Use a specific grid robot
-    static constexpr auto dimension = Robot::dimension;
-    static constexpr auto rake = vamp::FloatVectorWidth;
-    static constexpr auto resolution = Robot::resolution;
-    
+
+void init_mr_planning(nb::module_& pymodule)
+{
     // Create the multi-robot planning module
     auto mr_module = pymodule.def_submodule("mr_planning", "Multi-robot planning framework");
-    
+
+    // Bind FloatVector<7> for configurations
+    nb::class_<FloatVector7>(mr_module, "FloatVector7")
+        .def(nb::init<>())
+        .def(nb::init<const std::vector<float>&>())
+        .def("__getitem__", [](const FloatVector7& v, std::size_t i) {
+            if (i >= 7) throw nb::index_error("Index out of range");
+            return v[{i, 0}];
+        })
+        .def("__setitem__", [](FloatVector7& v, std::size_t i, float value) {
+            if (i >= 7) throw nb::index_error("Index out of range");
+            // Create new FloatVector with modified data
+            auto array = v.to_array();
+            array[i] = value;
+            v = FloatVector7(array.data());
+        })
+        .def("to_list", [](const FloatVector7& v) {
+            std::vector<float> result(7);
+            for (std::size_t i = 0; i < 7; ++i) {
+                result[i] = v[{i, 0}];
+            }
+            return result;
+        })
+        .def("from_list", [](FloatVector7& v, const std::vector<float>& values) {
+            if (values.size() != 7) throw std::runtime_error("Expected 7 values");
+            // Create new FloatVector from the values
+            v = FloatVector7(values.data());
+        });
+    // Explicitly assign FloatVector7 to the submodule's namespace
+    mr_module.attr("FloatVector7") = nb::type<FloatVector7>();
+
     // Bind MRProblem
-    nb::class_<MRProblem<dimension>>(mr_module, "MRProblem")
+    nb::class_<MRProblem<7>>(mr_module, "MRProblem")
         .def(nb::init<>(), "Create an empty multi-robot problem")
-        .def("add_robot", &MRProblem<dimension>::add_robot, 
+        .def("add_robot", &MRProblem<7>::add_robot, 
              nb::arg("start"), nb::arg("goal"), nb::arg("base_pos"), nb::arg("name") = "",
              "Add a robot to the problem")
-        .def("clear", &MRProblem<dimension>::clear, "Clear all robots from the problem")
-        .def("is_valid", &MRProblem<dimension>::is_valid, "Check if the problem is well-formed")
-        .def("num_robots", &MRProblem<dimension>::num_robots, "Get the number of robots")
-        .def_rw("start_configurations", &MRProblem<dimension>::start_configurations)
-        .def_rw("goal_configurations", &MRProblem<dimension>::goal_configurations)
-        .def_rw("base_positions", &MRProblem<dimension>::base_positions)
-        .def_rw("environment", &MRProblem<dimension>::environment)
-        .def_rw("problem_name", &MRProblem<dimension>::problem_name)
-        .def_rw("robot_names", &MRProblem<dimension>::robot_names);
+        .def("clear", &MRProblem<7>::clear, "Clear all robots from the problem")
+        .def("is_valid", &MRProblem<7>::is_valid, "Check if the problem is well-formed")
+        .def("num_robots", &MRProblem<7>::num_robots, "Get the number of robots")
+        .def_rw("start_configurations", &MRProblem<7>::start_configurations)
+        .def_rw("goal_configurations", &MRProblem<7>::goal_configurations)
+        .def_rw("base_positions", &MRProblem<7>::base_positions)
+        .def_rw("environment", &MRProblem<7>::environment)
+        .def_rw("problem_name", &MRProblem<7>::problem_name)
+        .def_rw("robot_names", &MRProblem<7>::robot_names);
     
     // Bind MRPlanningResult
-    nb::class_<MRPlanningResult<dimension>>(mr_module, "MRPlanningResult")
+    nb::class_<MRPlanningResult<7>>(mr_module, "MRPlanningResult")
         .def(nb::init<>(), "Create an empty planning result")
-        .def("is_valid", &MRPlanningResult<dimension>::is_valid, "Check if the result is valid")
-        .def("num_robots", &MRPlanningResult<dimension>::num_robots, "Get the number of robot paths")
-        .def("calculate_total_cost", &MRPlanningResult<dimension>::calculate_total_cost, "Calculate total cost")
-        .def_rw("robot_paths", &MRPlanningResult<dimension>::robot_paths)
-        .def_rw("total_cost", &MRPlanningResult<dimension>::total_cost)
-        .def_rw("nanoseconds", &MRPlanningResult<dimension>::nanoseconds)
-        .def_rw("iterations", &MRPlanningResult<dimension>::iterations)
-        .def_rw("success", &MRPlanningResult<dimension>::success)
-        .def_rw("algorithm_name", &MRPlanningResult<dimension>::algorithm_name);
+        .def("is_valid", &MRPlanningResult<7>::is_valid, "Check if the result is valid")
+        .def("num_robots", &MRPlanningResult<7>::num_robots, "Get the number of robot paths")
+        .def("calculate_total_cost", &MRPlanningResult<7>::calculate_total_cost, "Calculate total cost")
+        .def_rw("robot_paths", &MRPlanningResult<7>::robot_paths)
+        .def_rw("total_cost", &MRPlanningResult<7>::total_cost)
+        .def_rw("nanoseconds", &MRPlanningResult<7>::nanoseconds)
+        .def_rw("iterations", &MRPlanningResult<7>::iterations)
+        .def_rw("success", &MRPlanningResult<7>::success)
+        .def_rw("algorithm_name", &MRPlanningResult<7>::algorithm_name);
     
     // Bind MRSettings
     nb::class_<MRSettings>(mr_module, "MRSettings")
         .def(nb::init<>(), "Create default multi-robot settings")
         .def_rw("enable_parallel_roadmap_construction", &MRSettings::enable_parallel_roadmap_construction)
-        .def_rw("max_roadmap_size", &MRSettings::max_roadmap_size)
-        .def_rw("max_roadmap_iterations", &MRSettings::max_roadmap_iterations)
         .def_rw("enable_inter_robot_collision_checking", &MRSettings::enable_inter_robot_collision_checking)
         .def_rw("inter_robot_safety_margin", &MRSettings::inter_robot_safety_margin)
-        .def_rw("max_mr_iterations", &MRSettings::max_mr_iterations)
         .def_rw("algorithm", &MRSettings::algorithm)
-        .def_rw("num_threads", &MRSettings::num_threads)
-        .def("is_valid", &MRSettings::is_valid, "Check if settings are valid")
-        .def("set_roadmap_params", &MRSettings::set_roadmap_params,
-             nb::arg("max_size"), nb::arg("max_iters"), nb::arg("batch_size") = 1000,
-             "Set roadmap construction parameters")
-        .def("set_rrtc_params", &MRSettings::set_rrtc_params,
-             nb::arg("range"), nb::arg("max_iters"), nb::arg("max_samples"),
-             "Set RRTConnect parameters")
-        .def("set_inter_robot_params", &MRSettings::set_inter_robot_params,
-             nb::arg("enable"), nb::arg("safety_margin") = 0.1f,
-             "Set inter-robot collision checking parameters")
-        .def("set_performance_params", &MRSettings::set_performance_params,
-             nb::arg("parallel"), nb::arg("threads") = 4,
-             "Set performance parameters");
+        .def_rw("roadmap_settings", &MRSettings::roadmap_settings)
+        .def_rw("rrtc_settings", &MRSettings::rrtc_settings);
     
-    // Bind MRPlannerBase (abstract base class) - disable copy constructor
-    nb::class_<MRPlannerBase<Robot, rake, resolution>>(mr_module, "MRPlannerBase")
-        .def("build_roadmaps", &MRPlannerBase<Robot, rake, resolution>::build_roadmaps,
-             nb::arg("starts"), nb::arg("goals"), "Build roadmaps for all robots")
-        .def("are_roadmaps_built", &MRPlannerBase<Robot, rake, resolution>::are_roadmaps_built,
-             "Check if roadmaps are built")
+    // Bind MRPlannerBase (abstract base class)
+    nb::class_<MRPlanner>(mr_module, "MRPlannerBase")
+        .def("build_roadmaps", &MRPlanner::build_roadmaps)
+        .def("are_roadmaps_built", &MRPlanner::are_roadmaps_built)
         .def("solve_ignoring_inter_robot_collisions", 
-             &MRPlannerBase<Robot, rake, resolution>::solve_ignoring_inter_robot_collisions,
-             nb::arg("starts"), nb::arg("goals"), "Solve ignoring inter-robot collisions")
-        .def("get_roadmap_build_time_ns", &MRPlannerBase<Robot, rake, resolution>::get_roadmap_build_time_ns,
-             "Get roadmap build time in nanoseconds")
-        .def("get_total_planning_time_ns", &MRPlannerBase<Robot, rake, resolution>::get_total_planning_time_ns,
-             "Get total planning time in nanoseconds");
+             &MRPlanner::solve_ignoring_inter_robot_collisions)
+        .def("get_roadmap_build_time_ns", &MRPlanner::get_roadmap_build_time_ns)
+        .def("get_total_planning_time_ns", &MRPlanner::get_total_planning_time_ns)
+        .def("get_settings", &MRPlanner::get_settings, nb::rv_policy::reference)
+        .def("get_environment", &MRPlanner::get_environment, nb::rv_policy::reference);
     
     // Bind DummyMRPlanner
-    nb::class_<DummyMRPlanner<Robot, rake, resolution>, MRPlannerBase<Robot, rake, resolution>>(mr_module, "DummyMRPlanner")
-        .def(nb::init<const std::vector<std::array<float, 3>>&, const vamp::collision::Environment<float>&, 
-                      std::shared_ptr<vamp::rng::RNG<dimension>>, const MRSettings&>(),
-             nb::arg("base_positions"), nb::arg("environment"), nb::arg("rng"), nb::arg("settings") = MRSettings(),
+    nb::class_<DummyPlanner, MRPlanner>(mr_module, "DummyMRPlanner")
+        .def(nb::init<const std::vector<std::array<float, 3>>&, 
+                      const vamp::collision::Environment<float>&, 
+                      std::shared_ptr<vamp::rng::RNG<7>>, 
+                      const MRSettings&>(),
+             nb::arg("base_positions"), nb::arg("env"), nb::arg("rng"), nb::arg("settings") = MRSettings(),
              "Create a dummy multi-robot planner")
-        .def("solve", static_cast<MRPlanningResult<dimension>(DummyMRPlanner<Robot, rake, resolution>::*)(const std::vector<vamp::robots::Panda_0_0::Configuration>&, const std::vector<vamp::robots::Panda_0_0::Configuration>&)>(&DummyMRPlanner<Robot, rake, resolution>::solve),
-             nb::arg("starts"), nb::arg("goals"), "Solve the multi-robot planning problem")
-        .def("get_name", &DummyMRPlanner<Robot, rake, resolution>::get_name, "Get planner name")
-        .def("get_description", &DummyMRPlanner<Robot, rake, resolution>::get_description, "Get planner description");
+        .def("solve", static_cast<MRPlanningResult<7> (DummyPlanner::*)(const std::vector<FloatVector7>&, const std::vector<FloatVector7>&)>(&DummyPlanner::solve),
+             nb::arg("starts"), nb::arg("goals"), "Solve the multi-robot planning problem");
     
     // Bind MRPlannerFactory
     nb::class_<MRPlannerFactory>(mr_module, "MRPlannerFactory")
-        .def_static("create_planner", 
-                    [](const std::string& planner_type, 
-                       const std::vector<std::array<float, 3>>& base_positions,
-                       const vamp::collision::Environment<float>& env,
-                       const MRSettings& settings,
-                       std::shared_ptr<vamp::rng::RNG<dimension>> rng) -> std::unique_ptr<MRPlannerBase<Robot, rake, resolution>> {
-                        return MRPlannerFactory::create_planner<Robot, rake, resolution>(
-                            planner_type, base_positions, env, settings, rng);
-                    },
-                    nb::arg("planner_type"), nb::arg("base_positions"), nb::arg("environment"), 
-                    nb::arg("settings"), nb::arg("rng"),
+        .def_static("create_planner", &MRPlannerFactory::create_planner,
+                    nb::arg("algorithm"), nb::arg("base_positions"), nb::arg("environment"), 
+                    nb::arg("rng"), nb::arg("settings") = MRSettings(),
                     "Create a multi-robot planner of the specified type")
         .def_static("get_available_algorithms", &MRPlannerFactory::get_available_algorithms,
-                    "Get list of available algorithm types")
+                    "Get list of available planning algorithms")
         .def_static("is_algorithm_available", &MRPlannerFactory::is_algorithm_available,
-                    nb::arg("algorithm"), "Check if an algorithm is available")
-        .def_static("get_algorithm_description", &MRPlannerFactory::get_algorithm_description,
-                    nb::arg("algorithm"), "Get description of an algorithm")
-        .def_static("create_dummy_planner", 
-                    [](const std::vector<std::array<float, 3>>& base_positions,
-                       const vamp::collision::Environment<float>& env,
-                       const MRSettings& settings,
-                       std::shared_ptr<vamp::rng::RNG<dimension>> rng) -> std::unique_ptr<MRPlannerBase<Robot, rake, resolution>> {
-                        return MRPlannerFactory::create_dummy_planner<Robot, rake, resolution>(
-                            base_positions, env, settings, rng);
-                    },
-                    nb::arg("base_positions"), nb::arg("environment"), 
-                    nb::arg("settings") = MRSettings(), nb::arg("rng") = nullptr,
-                    "Create a dummy multi-robot planner");
+                    nb::arg("algorithm"), "Check if an algorithm is available");
     
     // Helper functions for easy multi-robot planning
     mr_module.def("create_mr_problem", 
-                  [](const std::vector<std::vector<float>>& starts,
-                     const std::vector<std::vector<float>>& goals,
-                     const std::vector<std::array<float, 3>>& base_positions,
+                  [](const std::vector<std::array<float, 3>>& base_positions,
+                     const std::vector<FloatVector7>& starts,
+                     const std::vector<FloatVector7>& goals,
                      const vamp::collision::Environment<float>& env,
-                     const std::string& problem_name = "mr_problem") -> MRProblem<dimension> {
-                      MRProblem<dimension> problem;
+                     const MRSettings& settings) -> MRProblem<7> {
+                      MRProblem<7> problem;
                       problem.environment = env;
-                      problem.problem_name = problem_name;
+                      problem.problem_name = "mr_problem";
                       
-                      // Convert starts and goals to FloatVector<dimension>
-                      for (const auto& start : starts) {
-                          if (start.size() != dimension) {
-                              throw std::runtime_error("Start configuration has wrong dimension");
-                          }
-                          vamp::FloatVector<dimension> config;
-                          for (size_t i = 0; i < dimension; ++i) {
-                              config[i] = start[i];
-                          }
-                          problem.start_configurations.push_back(config);
-                      }
+                      problem.base_positions = base_positions;
                       
-                      for (const auto& goal : goals) {
-                          if (goal.size() != dimension) {
-                              throw std::runtime_error("Goal configuration has wrong dimension");
-                          }
-                          vamp::FloatVector<dimension> config;
-                          for (size_t i = 0; i < dimension; ++i) {
-                              config[i] = goal[i];
-                          }
-                          problem.goal_configurations.push_back(config);
-                      }
-                      
-                      // Convert base positions
-                      for (const auto& pos : base_positions) {
-                          problem.base_positions.push_back(pos);
-                      }
+                      problem.start_configurations = starts;
+                      problem.goal_configurations = goals;
                       
                       // Generate robot names
-                      for (size_t i = 0; i < starts.size(); ++i) {
+                      for (std::size_t i = 0; i < base_positions.size(); ++i) {
                           problem.robot_names.push_back("robot_" + std::to_string(i));
                       }
                       
                       return problem;
                   },
-                  nb::arg("starts"), nb::arg("goals"), nb::arg("base_positions"), 
-                  nb::arg("environment"), nb::arg("problem_name") = "mr_problem",
+                  nb::arg("base_positions"), nb::arg("starts"), nb::arg("goals"), 
+                  nb::arg("environment"), nb::arg("settings"),
                   "Create a multi-robot planning problem");
-    
+
     mr_module.def("solve_mr_problem",
-                  [](const MRProblem<dimension>& problem, 
-                     const std::string& planner_type = "dummy",
-                     const MRSettings& settings = MRSettings()) -> MRPlanningResult<dimension> {
-                      auto rng = std::make_shared<vamp::rng::Halton<dimension>>();
-                      auto planner = MRPlannerFactory::create_planner<Robot, rake, resolution>(
-                          planner_type, problem.base_positions, problem.environment, settings, rng);
+                  [](const MRProblem<7>& problem, 
+                     const std::string& algorithm = "dummy",
+                     const MRSettings& settings = MRSettings()) -> MRPlanningResult<7> {
+                      // Create RNG using concrete implementation
+                      auto rng = std::make_shared<HaltonRNG>();
                       
-                      std::vector<vamp::robots::Panda_0_0::Configuration> starts, goals;
-                      for (const auto& start : problem.start_configurations) {
-                          starts.emplace_back(start);
-                      }
-                      for (const auto& goal : problem.goal_configurations) {
-                          goals.emplace_back(goal);
-                      }
+                      // Create planner
+                      auto planner = MRPlannerFactory::create_planner(
+                          algorithm, problem.base_positions, problem.environment, rng, settings);
                       
-                      return planner->solve_ignoring_inter_robot_collisions(starts, goals);
+                      // Solve problem
+                      return planner->solve_ignoring_inter_robot_collisions(
+                          problem.start_configurations, problem.goal_configurations);
                   },
-                  nb::arg("problem"), nb::arg("planner_type") = "dummy", nb::arg("settings") = MRSettings(),
-                  "Solve a multi-robot problem with the specified planner");
-} 
+                  nb::arg("problem"), nb::arg("algorithm") = "dummy", nb::arg("settings") = MRSettings(),
+                  "Solve a multi-robot planning problem");
+
+    // Helper function to create dummy planner
+    mr_module.def("create_dummy_planner", [](const std::vector<std::array<float, 3>>& base_positions,
+                                            const vamp::collision::Environment<float>& env,
+                                            const MRSettings& settings) {
+        auto rng = std::make_shared<HaltonRNG>();
+        return std::make_unique<DummyPlanner>(base_positions, env, rng, settings);
+    });
+
+    // Set __all__ for the submodule
+    mr_module.attr("__all__") = nb::make_tuple(
+        "FloatVector7",
+        "MRProblem",
+        "MRPlanningResult",
+        "MRSettings",
+        "MRPlannerBase",
+        "DummyMRPlanner",
+        "MRPlannerFactory",
+        "create_mr_problem",
+        "solve_mr_problem",
+        "create_dummy_planner"
+    );
+}
+
+}  // namespace vamp::binding 

@@ -5,7 +5,7 @@
 #include <array>
 #include <vector>
 
-#include <vamp/collision/sphere.hh>
+#include <vamp/collision/shapes.hh>
 #include <vamp/collision/environment.hh>
 #include <vamp/planning/plan.hh>
 #include <vamp/planning/rrtc.hh>
@@ -13,16 +13,17 @@
 #include <vamp/planning/fcit.hh>
 #include <vamp/planning/aorrtc.hh>
 #include <vamp/random/rng.hh>
+#include <vamp/vector.hh>
 
 namespace vamp::robots
 {
-    // Forward declarations
-    class Configuration;
-    class Path;
-    class PlanningResult;
-    class Roadmap;
-    class RNG;
-    class ProlateHyperspheroid;
+    // Use actual types instead of forward declarations
+    using Configuration = vamp::FloatVector<7>;  // Fixed dimension for Panda robots
+    using Path = vamp::planning::Path<7>;
+    using PlanningResult = vamp::planning::PlanningResult<7>;
+    using Roadmap = vamp::planning::Roadmap<7>;
+    using RNG = vamp::rng::RNG<7>;
+    using ProlateHyperspheroid = vamp::planning::ProlateHyperspheroid<7>;
 
     /**
      * @brief Base interface for multi-robot algorithms
@@ -204,11 +205,11 @@ namespace vamp::robots
                                      std::shared_ptr<RNG> rng) = 0;
 
         /**
-         * @brief Build roadmap with PRM
+         * @brief Build roadmap for the robot
          * @param start Start configuration
          * @param goal Goal configuration
          * @param env Environment
-         * @param settings PRM settings
+         * @param settings Roadmap settings
          * @param rng Random number generator
          * @return Roadmap
          */
@@ -231,28 +232,28 @@ namespace vamp::robots
                                        std::shared_ptr<RNG> rng) = 0;
 
         /**
-         * @brief Check sphere validity for a configuration
-         * @param config Robot configuration
+         * @brief Get sphere validity information
+         * @param config Configuration
          * @param env Environment
          * @return Vector of collision information for each sphere
          */
         virtual std::vector<std::vector<std::string>> sphere_validity(const Configuration& config,
-                                                                      const collision::Environment<float>& env) = 0;
+                                                                     const collision::Environment<float>& env) = 0;
 
         /**
          * @brief Compute end-effector forward kinematics
-         * @param config Robot configuration
-         * @return Pair of [position, orientation] where orientation is xyzw quaternion
+         * @param config Configuration
+         * @return Pair of position and orientation
          */
         virtual std::pair<std::array<float, 3>, std::array<float, 4>> eefk(const Configuration& config) = 0;
 
         /**
-         * @brief Filter point cloud by removing points in collision with robot
-         * @param pointcloud Input point cloud
-         * @param config Robot configuration
+         * @brief Filter robot from pointcloud
+         * @param pointcloud Input pointcloud
+         * @param config Configuration
          * @param env Environment
-         * @param point_radius Radius of each point
-         * @return Filtered point cloud
+         * @param point_radius Point radius
+         * @return Filtered pointcloud
          */
         virtual std::vector<collision::Point> filter_from_pointcloud(const std::vector<collision::Point>& pointcloud,
                                                                     const Configuration& config,
@@ -260,31 +261,31 @@ namespace vamp::robots
                                                                     float point_radius) = 0;
 
         /**
-         * @brief Compute distance between two configurations
+         * @brief Compute distance between configurations
          * @param a First configuration
          * @param b Second configuration
-         * @return L2 distance
+         * @return Distance
          */
         virtual float distance(const Configuration& a, const Configuration& b) = 0;
 
         // RNG factory methods
         /**
-         * @brief Create a Halton sequence RNG
+         * @brief Create Halton sequence RNG
          * @return Shared pointer to RNG
          */
         virtual std::shared_ptr<RNG> halton() = 0;
 
         /**
-         * @brief Create a PHS sampler RNG
+         * @brief Create PHS sampler
          * @param phs Prolate hyperspheroid
          * @param rng Base RNG
-         * @return Shared pointer to RNG
+         * @return Shared pointer to PHS RNG
          */
         virtual std::shared_ptr<RNG> phs_sampler(const ProlateHyperspheroid& phs, std::shared_ptr<RNG> rng) = 0;
 
 #if defined(__x86_64__)
         /**
-         * @brief Create an XORShift RNG (x86_64 only)
+         * @brief Create XORShift RNG
          * @return Shared pointer to RNG
          */
         virtual std::shared_ptr<RNG> xorshift() = 0;

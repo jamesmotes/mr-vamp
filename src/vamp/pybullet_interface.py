@@ -497,7 +497,7 @@ Use left/right arrow keys to move through individual states."""
 
         # Global animation state
         global_playing = False
-        selected_robot = None
+        selected_robot = None  # None = all robots, otherwise specific robot ID
         
         # Keyboard controls
         left = self.client.B3G_LEFT_ARROW
@@ -508,7 +508,8 @@ Use left/right arrow keys to move through individual states."""
 
         print("Multi-robot animation controls:")
         print("  Space: Start/stop global animation")
-        print("  Tab: Select next robot for individual control")
+        print("  Tab: Select next robot for individual control (or 'all robots')")
+        print("  A: Select 'all robots' mode (arrow keys step all robots together)")
         print("  0-9: Select specific robot by number")
         print("  Left/Right arrows: Step through states (when animation paused)")
         print("  R: Reset all robots to start")
@@ -546,15 +547,28 @@ Use left/right arrow keys to move through individual states."""
                     state['playing'] = global_playing
                 print(f"Global animation: {'Playing' if global_playing else 'Paused'}")
 
-            # Robot selection
+            # Select "all robots" mode explicitly
+            elif ord('a') in keys and keys[ord('a')] & self.client.KEY_WAS_TRIGGERED:
+                selected_robot = None
+                print("Selected: All robots (arrow keys will step all robots together)")
+
+            # Robot selection (including "all robots")
             elif tab_code in keys and keys[tab_code] & self.client.KEY_WAS_TRIGGERED:
                 robot_ids = list(robot_states.keys())
                 if selected_robot is None:
+                    # First tab: select first robot
                     selected_robot = robot_ids[0]
-                else:
+                    print(f"Selected robot: {selected_robot} ({robot_states[selected_robot]['config'].name})")
+                elif selected_robot in robot_ids:
+                    # Subsequent tabs: cycle through robots
                     current_idx = robot_ids.index(selected_robot)
-                    selected_robot = robot_ids[(current_idx + 1) % len(robot_ids)]
-                print(f"Selected robot: {selected_robot} ({robot_states[selected_robot]['config'].name})")
+                    next_idx = (current_idx + 1) % len(robot_ids)
+                    selected_robot = robot_ids[next_idx]
+                    print(f"Selected robot: {selected_robot} ({robot_states[selected_robot]['config'].name})")
+                else:
+                    # After cycling through all robots, select "all robots"
+                    selected_robot = None
+                    print("Selected: All robots (arrow keys will step all robots together)")
 
             # Number key selection
             elif any(key in keys and keys[key] & self.client.KEY_WAS_TRIGGERED for key in number_keys):
@@ -565,6 +579,10 @@ Use left/right arrow keys to move through individual states."""
                         if robot_num < len(robot_ids):
                             selected_robot = robot_ids[robot_num]
                             print(f"Selected robot: {selected_robot} ({robot_states[selected_robot]['config'].name})")
+                        else:
+                            # Number key beyond robot count: select "all robots"
+                            selected_robot = None
+                            print("Selected: All robots (arrow keys will step all robots together)")
                         break
 
             # Individual robot control (when global animation is paused)
@@ -582,6 +600,24 @@ Use left/right arrow keys to move through individual states."""
                     if state['plan_idx'] >= len(state['config'].plan):
                         state['plan_idx'] = 0
                     print(f"Robot {selected_robot}: State {state['plan_idx']}")
+
+            # All robots control (when global animation is paused and selected_robot is None)
+            elif not global_playing and selected_robot is None:
+                if left in keys and keys[left] & self.client.KEY_WAS_TRIGGERED:
+                    # Step all robots backward
+                    for state in robot_states.values():
+                        state['plan_idx'] -= 1
+                        if state['plan_idx'] < 0:
+                            state['plan_idx'] = len(state['config'].plan) - 1
+                    print("All robots: Stepped backward")
+
+                elif right in keys and keys[right] & self.client.KEY_WAS_TRIGGERED:
+                    # Step all robots forward
+                    for state in robot_states.values():
+                        state['plan_idx'] += 1
+                        if state['plan_idx'] >= len(state['config'].plan):
+                            state['plan_idx'] = 0
+                    print("All robots: Stepped forward")
 
             # Reset all robots
             elif ord('r') in keys and keys[ord('r')] & self.client.KEY_WAS_TRIGGERED:

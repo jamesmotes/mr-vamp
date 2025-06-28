@@ -6,6 +6,7 @@
 #include <chrono>
 #include <thread>
 #include <future>
+#include <variant>
 
 #include <vamp/collision/environment.hh>
 #include <vamp/planning/roadmap.hh>
@@ -29,29 +30,43 @@ namespace vamp::mr_planning
      * 
      * This class provides the foundation for all multi-robot planners, including
      * roadmap construction, robot management, and common utility functions.
+     * Supports heterogeneous robots with different grid positions.
      * 
-     * @tparam RobotType The robot type (e.g., Panda_0_0)
      * @tparam rake SIMD vector width
      * @tparam resolution Collision checking resolution
      */
-    template<typename RobotType, std::size_t rake, std::size_t resolution>
+    template<std::size_t rake, std::size_t resolution>
     class MRPlannerBase
     {
     public:
-        using Configuration = typename RobotType::Configuration;
-        static constexpr auto dimension = RobotType::dimension;
-        using RNG = typename vamp::rng::RNG<RobotType::dimension>;
         using Environment = collision::Environment<float>;
+        using RNG = vamp::rng::RNG<7>;  // Fixed dimension for Panda robots
 
     protected:
+        // Robot type variants for different grid positions
+        using Panda_0_0 = vamp::robots::Panda_0_0;
+        using Panda_0_1 = vamp::robots::Panda_0_1;
+        using Panda_0_2 = vamp::robots::Panda_0_2;
+        using Panda_1_0 = vamp::robots::Panda_1_0;
+        using Panda_1_1 = vamp::robots::Panda_1_1;
+        using Panda_1_2 = vamp::robots::Panda_1_2;
+        using Panda_2_0 = vamp::robots::Panda_2_0;
+        using Panda_2_1 = vamp::robots::Panda_2_1;
+        using Panda_2_2 = vamp::robots::Panda_2_2;
+
+        // Variant to hold different robot types
+        using RobotVariant = std::variant<Panda_0_0, Panda_0_1, Panda_0_2, 
+                                         Panda_1_0, Panda_1_1, Panda_1_2,
+                                         Panda_2_0, Panda_2_1, Panda_2_2>;
+
         /**
          * @brief Internal structure for managing robot roadmaps
          */
         struct RobotRoadmap {
-            std::unique_ptr<planning::Roadmap<dimension>> roadmap;
+            std::unique_ptr<planning::Roadmap<7>> roadmap;  // Fixed dimension for Panda
             std::vector<planning::RoadmapNode> nodes;
             std::vector<planning::utils::ConnectedComponent> components;
-            std::unique_ptr<planning::NN<dimension>> nn_structure;
+            std::unique_ptr<planning::NN<7>> nn_structure;  // Fixed dimension for Panda
             std::unique_ptr<float[]> states_buffer;
             std::size_t start_index;
             std::size_t goal_index;
@@ -64,9 +79,10 @@ namespace vamp::mr_planning
          * @brief Internal structure for managing robot instances
          */
         struct RobotInstance {
+            RobotVariant robot_type;  // The specific robot type (grid variant)
             RobotRoadmap roadmap;
-            Configuration start_config;
-            Configuration goal_config;
+            vamp::FloatVector<7> start_config;  // Use FloatVector for SIMD compatibility
+            vamp::FloatVector<7> goal_config;
             std::array<float, 3> base_position;
             std::string robot_id;
             
@@ -90,6 +106,45 @@ namespace vamp::mr_planning
             return SIMDEnvironment(environment_);
         }
 
+        /**
+         * @brief Get the robot type for a given base position
+         * @param base_position Base position [x, y, z]
+         * @return Robot variant for the position
+         */
+        RobotVariant get_robot_type_for_position(const std::array<float, 3>& base_position) const
+        {
+            // Round to nearest grid position (convert to cm * 100)
+            int grid_x = std::round(base_position[0] * 100);
+            int grid_y = std::round(base_position[1] * 100);
+            int grid_z = std::round(base_position[2] * 100);
+            
+            // Map to template variant
+            if (grid_x == 0 && grid_y == 0 && grid_z == 5) return Panda_0_0{};
+            if (grid_x == 0 && grid_y == 100 && grid_z == 5) return Panda_0_1{};
+            if (grid_x == 0 && grid_y == 200 && grid_z == 5) return Panda_0_2{};
+            if (grid_x == 100 && grid_y == 0 && grid_z == 5) return Panda_1_0{};
+            if (grid_x == 100 && grid_y == 100 && grid_z == 5) return Panda_1_1{};
+            if (grid_x == 100 && grid_y == 200 && grid_z == 5) return Panda_1_2{};
+            if (grid_x == 200 && grid_y == 0 && grid_z == 5) return Panda_2_0{};
+            if (grid_x == 200 && grid_y == 100 && grid_z == 5) return Panda_2_1{};
+            if (grid_x == 200 && grid_y == 200 && grid_z == 5) return Panda_2_2{};
+            
+            throw std::runtime_error("Position (" + std::to_string(base_position[0]) + ", " + 
+                                   std::to_string(base_position[1]) + ", " + 
+                                   std::to_string(base_position[2]) + 
+                                   ") not supported in grid");
+        }
+
+        /**
+         * @brief Get robot name from variant
+         * @param robot_variant Robot variant
+         * @return Robot name string
+         */
+        std::string get_robot_name(const RobotVariant& robot_variant) const
+        {
+            return std::visit([](const auto& robot) { return robot.name; }, robot_variant);
+        }
+
     public:
         /**
          * @brief Constructor
@@ -109,6 +164,16 @@ namespace vamp::mr_planning
                 RobotInstance robot_instance;
                 robot_instance.base_position = base_positions[i];
                 robot_instance.robot_id = "robot_" + std::to_string(i);
+                
+                // Get the appropriate robot type for this position
+                try {
+                    robot_instance.robot_type = get_robot_type_for_position(base_positions[i]);
+                } catch (const std::runtime_error& e) {
+                    throw std::runtime_error("Failed to create robot at position (" + 
+                                           std::to_string(base_positions[i][0]) + ", " +
+                                           std::to_string(base_positions[i][1]) + ", " +
+                                           std::to_string(base_positions[i][2]) + "): " + e.what());
+                }
                 
                 robots_.push_back(std::move(robot_instance));
             }
@@ -130,8 +195,8 @@ namespace vamp::mr_planning
          * @param starts Start configurations for each robot
          * @param goals Goal configurations for each robot
          */
-        void build_roadmaps(const std::vector<Configuration>& starts,
-                           const std::vector<Configuration>& goals)
+        void build_roadmaps(const std::vector<vamp::FloatVector<7>>& starts,
+                           const std::vector<vamp::FloatVector<7>>& goals)
         {
             if (starts.size() != robots_.size() || goals.size() != robots_.size()) {
                 throw std::runtime_error("Number of start/goal configurations must match number of robots");
@@ -166,13 +231,13 @@ namespace vamp::mr_planning
          * @param goals Goal configurations for each robot
          * @return Planning result with paths for each robot
          */
-        MRPlanningResult<dimension> solve_ignoring_inter_robot_collisions(
-            const std::vector<Configuration>& starts,
-            const std::vector<Configuration>& goals)
+        MRPlanningResult<7> solve_ignoring_inter_robot_collisions(
+            const std::vector<vamp::FloatVector<7>>& starts,
+            const std::vector<vamp::FloatVector<7>>& goals)
         {
             auto start_time = std::chrono::steady_clock::now();
             
-            MRPlanningResult<dimension> result;
+            MRPlanningResult<7> result;
             result.algorithm_name = "dummy_ignore_inter_robot";
             
             // Build roadmaps if not already built
@@ -180,7 +245,7 @@ namespace vamp::mr_planning
                 build_roadmaps(starts, goals);
             }
 
-            // Solve for each robot independently
+            // Solve for each robot independently using the correct robot type
             result.robot_paths.reserve(robots_.size());
             for (std::size_t i = 0; i < robots_.size(); ++i) {
                 auto robot_result = solve_single_robot(i, starts[i], goals[i]);
@@ -249,55 +314,61 @@ namespace vamp::mr_planning
         }
 
         /**
-         * @brief Check inter-robot collision between two robots
-         * @param robot1_idx Index of first robot (unused)
-         * @param robot2_idx Index of second robot (unused)
+         * @brief Check inter-robot collision between two robots using correct robot types
+         * @param robot1_idx Index of first robot
+         * @param robot2_idx Index of second robot
          * @param config1 Configuration of first robot
          * @param config2 Configuration of second robot
          * @return True if robots are in collision
          */
         virtual bool check_inter_robot_collision(std::size_t robot1_idx, std::size_t robot2_idx,
-                                               const Configuration& config1, 
-                                               const Configuration& config2)
+                                               const vamp::FloatVector<7>& config1, 
+                                               const vamp::FloatVector<7>& config2)
         {
-            (void)robot1_idx;  // Suppress unused parameter warning
-            (void)robot2_idx;  // Suppress unused parameter warning
-            
             if (!settings_.enable_inter_robot_collision_checking) {
                 return false;
             }
 
-            // Get sphere representations for both robots using direct FK
-            typename RobotType::template Spheres<rake> spheres1, spheres2;
-            typename RobotType::template ConfigurationBlock<rake> block1, block2;
-            
-            // Convert configurations to blocks
-            for (std::size_t i = 0; i < dimension; ++i) {
-                block1[i] = config1[{i, 0}];
-                block2[i] = config2[{i, 0}];
-            }
-            
-            // Compute forward kinematics
-            RobotType::template sphere_fk<rake>(block1, spheres1);
-            RobotType::template sphere_fk<rake>(block2, spheres2);
+            // Use std::visit to handle different robot types
+            auto check_collision = [&](const auto& robot1, const auto& robot2) {
+                // Get sphere representations for both robots using template-based FK
+                typename std::decay_t<decltype(robot1)>::template Spheres<rake> spheres1, spheres2;
+                typename std::decay_t<decltype(robot1)>::template ConfigurationBlock<rake> block1, block2;
+                
+                // Convert configurations to blocks
+                for (std::size_t i = 0; i < 7; ++i) {
+                    block1[i] = config1[{i, 0}];
+                    block2[i] = config2[{i, 0}];
+                }
+                
+                // Compute forward kinematics
+                robot1.template sphere_fk<rake>(block1, spheres1);
+                robot2.template sphere_fk<rake>(block2, spheres2);
 
-            // Check sphere-sphere collisions with safety margin
-            float safety_margin = settings_.inter_robot_safety_margin;
-            for (std::size_t i = 0; i < RobotType::n_spheres; ++i) {
-                for (std::size_t j = 0; j < RobotType::n_spheres; ++j) {
-                    float dx = spheres1.x[{i, 0}] - spheres2.x[{j, 0}];
-                    float dy = spheres1.y[{i, 0}] - spheres2.y[{j, 0}];
-                    float dz = spheres1.z[{i, 0}] - spheres2.z[{j, 0}];
-                    float distance_sq = dx*dx + dy*dy + dz*dz;
-                    float min_distance = spheres1.r[{i, 0}] + spheres2.r[{j, 0}] + safety_margin;
-                    
-                    if (distance_sq < min_distance * min_distance) {
-                        return true;  // Collision detected
+                // Check sphere-sphere collisions with safety margin
+                float safety_margin = settings_.inter_robot_safety_margin;
+                for (std::size_t i = 0; i < robot1.n_spheres; ++i) {
+                    for (std::size_t j = 0; j < robot2.n_spheres; ++j) {
+                        float dx = spheres1.x[{i, 0}] - spheres2.x[{j, 0}];
+                        float dy = spheres1.y[{i, 0}] - spheres2.y[{j, 0}];
+                        float dz = spheres1.z[{i, 0}] - spheres2.z[{j, 0}];
+                        float distance_sq = dx*dx + dy*dy + dz*dz;
+                        float min_distance = spheres1.r[{i, 0}] + spheres2.r[{j, 0}] + safety_margin;
+                        
+                        if (distance_sq < min_distance * min_distance) {
+                            return true;  // Collision detected
+                        }
                     }
                 }
-            }
-            
-            return false;  // No collision
+                return false;  // No collision
+            };
+
+            // Check collision using the correct robot types for both robots
+            return std::visit([&](const auto& robot1) {
+                return std::visit([&](const auto& robot2) {
+                    return check_collision(robot1, robot2);
+                }, robots_[robot2_idx].robot_type);
+            }, robots_[robot1_idx].robot_type);
         }
 
         /**
@@ -356,44 +427,50 @@ namespace vamp::mr_planning
         }
 
         /**
-         * @brief Build roadmap for a specific robot
+         * @brief Build roadmap for a specific robot using the correct robot type
          * @param robot_idx Index of the robot
          */
         void build_roadmap_for_robot(std::size_t robot_idx)
         {
-            auto& robot = robots_[robot_idx];
+            auto& robot_instance = robots_[robot_idx];
             
-            // Convert environment to SIMD format for PRM
-            auto simd_env = get_simd_environment();
-            
-            // Build roadmap using PRM
-            auto roadmap_result = planning::PRM<RobotType, rake, resolution>::build_roadmap(
-                robot.start_config, robot.goal_config, simd_env, settings_.roadmap_settings, rng_);
-            
-            // Store roadmap data
-            robot.roadmap.roadmap = std::make_unique<planning::Roadmap<dimension>>(std::move(roadmap_result));
-            robot.roadmap.is_built = true;
+            // Use std::visit to handle different robot types
+            std::visit([&](const auto& robot_type) {
+                // Convert environment to SIMD format for PRM
+                auto simd_env = get_simd_environment();
+                
+                // Build roadmap using PRM with the correct robot type
+                auto roadmap_result = planning::PRM<std::decay_t<decltype(robot_type)>, rake, resolution>::build_roadmap(
+                    robot_instance.start_config, robot_instance.goal_config, simd_env, settings_.roadmap_settings, rng_);
+                
+                // Store roadmap data
+                robot_instance.roadmap.roadmap = std::make_unique<planning::Roadmap<7>>(std::move(roadmap_result));
+                robot_instance.roadmap.is_built = true;
+            }, robot_instance.robot_type);
         }
 
         /**
-         * @brief Solve single robot planning problem
-         * @param robot_idx Index of the robot (unused)
+         * @brief Solve single robot planning problem using the correct robot type
+         * @param robot_idx Index of the robot
          * @param start Start configuration
          * @param goal Goal configuration
          * @return Planning result
          */
-        planning::PlanningResult<dimension> solve_single_robot(std::size_t robot_idx,
-                                                             const Configuration& start,
-                                                             const Configuration& goal)
+        planning::PlanningResult<7> solve_single_robot(std::size_t robot_idx,
+                                                     const vamp::FloatVector<7>& start,
+                                                     const vamp::FloatVector<7>& goal)
         {
-            (void)robot_idx;  // Suppress unused parameter warning
+            auto& robot_instance = robots_[robot_idx];
             
-            // Convert environment to SIMD format for RRTC
-            auto simd_env = get_simd_environment();
-            
-            // Use RRTConnect for single robot planning
-            return planning::RRTC<RobotType, rake, resolution>::solve(
-                start, goal, simd_env, settings_.rrtc_settings, rng_);
+            // Use std::visit to handle different robot types
+            return std::visit([&](const auto& robot_type) {
+                // Convert environment to SIMD format for RRTC
+                auto simd_env = get_simd_environment();
+                
+                // Use RRTConnect for single robot planning with the correct robot type
+                return planning::RRTC<std::decay_t<decltype(robot_type)>, rake, resolution>::solve(
+                    start, goal, simd_env, settings_.rrtc_settings, rng_);
+            }, robot_instance.robot_type);
         }
     };
 

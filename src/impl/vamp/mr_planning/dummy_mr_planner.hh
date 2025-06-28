@@ -5,23 +5,20 @@
 namespace vamp::mr_planning
 {
     /**
-     * @brief Simple multi-robot planner that ignores inter-robot collisions
+     * @brief Dummy multi-robot planner for testing and validation
      * 
-     * This planner provides a baseline implementation that treats each robot
-     * independently, solving individual planning problems without considering
-     * inter-robot collisions. This serves as a comparison baseline and testing
-     * framework for more sophisticated multi-robot algorithms.
+     * This planner implements a simple approach that ignores inter-robot collisions
+     * and plans for each robot independently. It serves as a baseline for testing
+     * the multi-robot planning framework.
      * 
-     * @tparam RobotType The robot type (e.g., Panda_0_0)
      * @tparam rake SIMD vector width
      * @tparam resolution Collision checking resolution
      */
-    template<typename RobotType, std::size_t rake, std::size_t resolution>
-    class DummyMRPlanner : public MRPlannerBase<RobotType, rake, resolution>
+    template<std::size_t rake, std::size_t resolution>
+    class DummyMRPlanner : public MRPlannerBase<rake, resolution>
     {
     public:
-        using Base = MRPlannerBase<RobotType, rake, resolution>;
-        using Configuration = typename Base::Configuration;
+        using Base = MRPlannerBase<rake, resolution>;
         using Environment = typename Base::Environment;
         using RNG = typename Base::RNG;
 
@@ -38,10 +35,6 @@ namespace vamp::mr_planning
                        const MRSettings& settings = MRSettings())
             : Base(base_positions, env, rng, settings)
         {
-            // Override settings to disable inter-robot collision checking for dummy planner
-            auto& mutable_settings = const_cast<MRSettings&>(this->get_settings());
-            mutable_settings.enable_inter_robot_collision_checking = false;
-            mutable_settings.algorithm = "dummy";
         }
 
         /**
@@ -50,9 +43,10 @@ namespace vamp::mr_planning
          * @param goals Goal configurations for each robot
          * @return Planning result with paths for each robot
          */
-        MRPlanningResult<Base::dimension> solve(const std::vector<Configuration>& starts,
-                                               const std::vector<Configuration>& goals)
+        MRPlanningResult<7> solve(const std::vector<vamp::FloatVector<7>>& starts,
+                                 const std::vector<vamp::FloatVector<7>>& goals)
         {
+            // For dummy planner, just use the ignore inter-robot collisions method
             return this->solve_ignoring_inter_robot_collisions(starts, goals);
         }
 
@@ -61,7 +55,7 @@ namespace vamp::mr_planning
          * @param problem Multi-robot problem definition
          * @return Planning result with paths for each robot
          */
-        MRPlanningResult<Base::dimension> solve(const MRProblem<Base::dimension>& problem)
+        MRPlanningResult<7> solve(const MRProblem<7>& problem)
         {
             if (!problem.is_valid()) {
                 throw std::runtime_error("Invalid multi-robot problem");
@@ -97,8 +91,7 @@ namespace vamp::mr_planning
          * @param robot_idx Index of the robot
          */
         void on_roadmap_built(std::size_t robot_idx) override {
-            // For dummy planner, we could add some logging or validation here
-            // For now, just call the base implementation
+            // Dummy planner doesn't need any special handling
             Base::on_roadmap_built(robot_idx);
         }
     };

@@ -104,7 +104,16 @@ def main(
 
         simple.path.interpolate_to_resolution(vamp.panda.resolution())
 
+        # Use the new multi-robot system for single robot (demonstrates backward compatibility)
+        print("Single robot animation using new multi-robot system:")
+        print("Press space to start/stop animation, use left/right arrows to step through states")
+        
+        # Method 1: Use the original animate function (backward compatible)
         sim.animate(simple.path)
+        
+        # Method 2: Use the new multi-robot system for single robot
+        # This demonstrates how the new system can handle single robots too
+        # sim.animate_multi([sim.skel_id], plan=simple.path)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ import sys
 import time
 import numpy as np
 import xmltodict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union, Callable
 from zlib import crc32
 from colorsys import hsv_to_rgb
 
@@ -36,6 +36,17 @@ def handle_color(name: Optional[str], color: Optional[Union[List[float], str]]) 
 
 
 @dataclass
+class RobotAnimationConfig:
+    """Configuration for a single robot's animation."""
+    robot_id: int
+    plan: Any
+    callback: Optional[Callable] = None
+    speed: float = 1.0
+    start_time: float = 0.0
+    name: Optional[str] = None
+
+
+@dataclass
 class PyBulletSimulator:
     client: BulletClient
 
@@ -50,6 +61,7 @@ class PyBulletSimulator:
 
         self.client.setRealTimeSimulation(0)
         self.objects = []
+        self.robots = {}  # Registry for additional robots
 
         if urdf:
             self.urdf = urdf
@@ -91,9 +103,38 @@ class PyBulletSimulator:
                         l2x = self.link_map[link2] if link2 in self.link_map else -1
                         self.client.setCollisionFilterPair(0, 0, l1x, l2x, False)
 
-    def set_joint_positions(self, positions: List[float]):
-        for joint, value in zip(self.joints, positions):
-            self.client.resetJointState(self.skel_id, joint, value, targetVelocity = 0)
+    def add_robot(self, robot_id: int, joints: List[int], name: str = None):
+        """Register an additional robot for multi-robot animation."""
+        self.robots[robot_id] = {
+            'joints': joints,
+            'name': name or f"Robot_{robot_id}"
+        }
+        print(f"Registered robot {robot_id} ({self.robots[robot_id]['name']}) with {len(joints)} joints")
+
+    def set_joint_positions(self, positions: List[float], robot_id: Optional[int] = None):
+        """Set joint positions for a specific robot or the main robot."""
+        if robot_id is None:
+            # Use main robot
+            for joint, value in zip(self.joints, positions):
+                self.client.resetJointState(self.skel_id, joint, value, targetVelocity = 0)
+        else:
+            # Use specific robot
+            if robot_id == self.skel_id:
+                # Main robot - use main robot joints
+                for joint, value in zip(self.joints, positions):
+                    self.client.resetJointState(self.skel_id, joint, value, targetVelocity = 0)
+            elif robot_id in self.robots:
+                # Registered robot - use its joints
+                robot_joints = self.robots[robot_id]['joints']
+                for joint, value in zip(robot_joints, positions):
+                    self.client.resetJointState(robot_id, joint, value, targetVelocity = 0)
+            else:
+                raise ValueError(f"Robot {robot_id} not registered. Use add_robot() first.")
+
+    def set_robot_base_position(self, position: Position, orientation: XYZWQuaternion = [0, 0, 0, 1], robot_id: Optional[int] = None):
+        """Set the robot's base position and orientation."""
+        target_id = robot_id if robot_id is not None else self.skel_id
+        self.client.resetBasePositionAndOrientation(target_id, position, orientation)
 
     def in_collision(self) -> bool:
         self.client.performCollisionDetection()
@@ -325,6 +366,7 @@ class PyBulletSimulator:
             self.client.removeAllUserDebugItems()
 
     def animate(self, plan, callback = None):
+        """Animate a single robot (backward compatible)."""
         if not len(plan):
             print("""Path has no states!
             """)
@@ -383,5 +425,181 @@ Use left/right arrow keys to move through individual states."""
             if moved:
                 if plan_idx >= len(plan):
                     plan_idx = 0
+
+            time.sleep(0.016)
+
+    def animate_multi(self, robot_plans: Union[Dict[int, Any], List[int], Any], 
+                     callbacks: Optional[Dict[int, Callable]] = None,
+                     plan: Optional[Any] = None):
+        """
+        Animate multiple robots with the same or different plans.
+        
+        Args:
+            robot_plans: Either a dict mapping robot_id -> plan, or a list of robot_ids with a single plan
+            callbacks: Optional dict mapping robot_id -> callback function
+            plan: Single plan to use for all robots (when robot_plans is a list of robot_ids)
+        """
+        # Handle different input formats
+        if isinstance(robot_plans, list):
+            # List of robot IDs with single plan
+            if plan is None:
+                raise ValueError("plan must be provided when robot_plans is a list of robot IDs")
+            robot_configs = {robot_id: plan for robot_id in robot_plans}
+        else:
+            # Dict of robot_id -> plan
+            robot_configs = robot_plans
+        
+        # Convert to RobotAnimationConfig objects
+        configs = []
+        for robot_id, robot_plan in robot_configs.items():
+            callback = callbacks.get(robot_id) if callbacks else None
+            
+            # Handle main robot (skel_id) which isn't in the robots registry
+            if robot_id == self.skel_id:
+                robot_name = "Main Robot"
+            else:
+                robot_name = self.robots.get(robot_id, {}).get('name', f"Robot_{robot_id}")
+            
+            configs.append(RobotAnimationConfig(
+                robot_id=robot_id,
+                plan=robot_plan,
+                callback=callback,
+                name=robot_name
+            ))
+        
+        self.animate_multi_advanced(configs)
+
+    def animate_multi_advanced(self, configs: List[RobotAnimationConfig]):
+        """
+        Advanced multi-robot animation with independent control per robot.
+        
+        Args:
+            configs: List of RobotAnimationConfig objects defining each robot's animation
+        """
+        if not configs:
+            print("No robot configurations provided!")
+            return
+
+        # Validate all plans have states
+        for config in configs:
+            if not len(config.plan):
+                print(f"Robot {config.robot_id} ({config.name}) has no states in plan!")
+                return
+
+        # Initialize state for each robot
+        robot_states = {}
+        for config in configs:
+            robot_states[config.robot_id] = {
+                'plan_idx': 0,
+                'playing': False,
+                'config': config
+            }
+
+        # Global animation state
+        global_playing = False
+        selected_robot = None
+        
+        # Keyboard controls
+        left = self.client.B3G_LEFT_ARROW
+        right = self.client.B3G_RIGHT_ARROW
+        space_code = ord(' ')
+        tab_code = ord('\t')
+        number_keys = [ord(str(i)) for i in range(10)]  # 0-9 keys
+
+        print("Multi-robot animation controls:")
+        print("  Space: Start/stop global animation")
+        print("  Tab: Select next robot for individual control")
+        print("  0-9: Select specific robot by number")
+        print("  Left/Right arrows: Step through states (when animation paused)")
+        print("  R: Reset all robots to start")
+        print("  Q: Quit animation")
+
+        while True:
+            # Update all robots
+            for robot_id, state in robot_states.items():
+                config = state['config']
+                plan_idx = state['plan_idx']
+                
+                # Get current state
+                c = config.plan[plan_idx]
+                if isinstance(c, list):
+                    c_list = c
+                elif isinstance(c, np.ndarray):
+                    c_list = c.tolist()
+                else:
+                    c_list = c.to_list()
+
+                # Set joint positions
+                self.set_joint_positions(c_list, robot_id)
+
+                # Call robot-specific callback
+                if callable(config.callback):
+                    config.callback(c_list, robot_id)
+
+            # Handle keyboard input
+            keys = self.client.getKeyboardEvents()
+            
+            # Global play/pause
+            if space_code in keys and keys[space_code] & self.client.KEY_WAS_TRIGGERED:
+                global_playing = not global_playing
+                for state in robot_states.values():
+                    state['playing'] = global_playing
+                print(f"Global animation: {'Playing' if global_playing else 'Paused'}")
+
+            # Robot selection
+            elif tab_code in keys and keys[tab_code] & self.client.KEY_WAS_TRIGGERED:
+                robot_ids = list(robot_states.keys())
+                if selected_robot is None:
+                    selected_robot = robot_ids[0]
+                else:
+                    current_idx = robot_ids.index(selected_robot)
+                    selected_robot = robot_ids[(current_idx + 1) % len(robot_ids)]
+                print(f"Selected robot: {selected_robot} ({robot_states[selected_robot]['config'].name})")
+
+            # Number key selection
+            elif any(key in keys and keys[key] & self.client.KEY_WAS_TRIGGERED for key in number_keys):
+                for key in number_keys:
+                    if key in keys and keys[key] & self.client.KEY_WAS_TRIGGERED:
+                        robot_num = int(chr(key))
+                        robot_ids = list(robot_states.keys())
+                        if robot_num < len(robot_ids):
+                            selected_robot = robot_ids[robot_num]
+                            print(f"Selected robot: {selected_robot} ({robot_states[selected_robot]['config'].name})")
+                        break
+
+            # Individual robot control (when global animation is paused)
+            elif not global_playing and selected_robot is not None:
+                state = robot_states[selected_robot]
+                
+                if left in keys and keys[left] & self.client.KEY_WAS_TRIGGERED:
+                    state['plan_idx'] -= 1
+                    if state['plan_idx'] < 0:
+                        state['plan_idx'] = len(state['config'].plan) - 1
+                    print(f"Robot {selected_robot}: State {state['plan_idx']}")
+
+                elif right in keys and keys[right] & self.client.KEY_WAS_TRIGGERED:
+                    state['plan_idx'] += 1
+                    if state['plan_idx'] >= len(state['config'].plan):
+                        state['plan_idx'] = 0
+                    print(f"Robot {selected_robot}: State {state['plan_idx']}")
+
+            # Reset all robots
+            elif ord('r') in keys and keys[ord('r')] & self.client.KEY_WAS_TRIGGERED:
+                for state in robot_states.values():
+                    state['plan_idx'] = 0
+                print("Reset all robots to start")
+
+            # Quit
+            elif ord('q') in keys and keys[ord('q')] & self.client.KEY_WAS_TRIGGERED:
+                print("Quitting animation")
+                break
+
+            # Advance playing robots
+            if global_playing:
+                for state in robot_states.values():
+                    if state['playing']:
+                        state['plan_idx'] += 1
+                        if state['plan_idx'] >= len(state['config'].plan):
+                            state['plan_idx'] = 0
 
             time.sleep(0.016)

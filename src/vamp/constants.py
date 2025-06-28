@@ -63,9 +63,10 @@ ROBOT_RADII_RANGES = {
     }
 
 ROBOT_FIRST_JOINT_LOCATIONS = {
-    "fetch": [0.0, 0.0, 0.4],
-    "ur5": [0.0, 0.0, 0.91],
-    "panda": [0.0, 0.0, 0.0],
+    "fetch": [0.0, 0.0, 0.424],
+    "ur5": [0.0, 0.0, 0.089159],
+    "panda": [0.0, 0.0, 0.05],
+    "baxter": [0.0, 0.0, 0.0],
     }
 
 ROBOT_MAX_RADII = {
@@ -73,5 +74,20 @@ ROBOT_MAX_RADII = {
     "fetch": 1.5,
     "panda": 1.19,
     }
+
+# Multi-robot grid variants for Panda
+# Note: These represent the actual base positions in meters, not the template parameters
+# The C++ template parameters are in centimeters * 100 for compiler compatibility
+PANDA_GRID_VARIANTS = {
+    "panda_0_0": {"base_x": 0.0, "base_y": 0.0, "base_z": 0.05},
+    "panda_0_1": {"base_x": 0.0, "base_y": 1.0, "base_z": 0.05},
+    "panda_0_2": {"base_x": 0.0, "base_y": 2.0, "base_z": 0.05},
+    "panda_1_0": {"base_x": 1.0, "base_y": 0.0, "base_z": 0.05},
+    "panda_1_1": {"base_x": 1.0, "base_y": 1.0, "base_z": 0.05},
+    "panda_1_2": {"base_x": 1.0, "base_y": 2.0, "base_z": 0.05},
+    "panda_2_0": {"base_x": 2.0, "base_y": 0.0, "base_z": 0.05},
+    "panda_2_1": {"base_x": 2.0, "base_y": 1.0, "base_z": 0.05},
+    "panda_2_2": {"base_x": 2.0, "base_y": 2.0, "base_z": 0.05},
+}
 
 POINT_RADIUS = 0.0025

@@ -50,6 +50,7 @@ list(APPEND VAMP_EXT_SOURCES
   src/impl/vamp/bindings/python.cc
   src/impl/vamp/bindings/environment.cc
   src/impl/vamp/bindings/settings.cc
+  src/impl/vamp/bindings/mr_planning.cc
 )
 
 list(APPEND VAMP_ROBOT_MODULES
@@ -136,6 +137,10 @@ if(VAMP_BUILD_CPP_DEMO)
   add_executable(vamp_rrtc_example scripts/cpp/rrtc_example.cc)
   target_link_libraries(vamp_rrtc_example PRIVATE Eigen3::Eigen)
   target_include_directories(vamp_rrtc_example SYSTEM PRIVATE ${VAMP_EXT_INCLUDES})
+  
+  add_executable(vamp_mr_planning_test scripts/cpp/test_mr_planning.cpp)
+  target_link_libraries(vamp_mr_planning_test PRIVATE Eigen3::Eigen)
+  target_include_directories(vamp_mr_planning_test SYSTEM PRIVATE ${VAMP_EXT_INCLUDES})
 endif()
 
 if(VAMP_BUILD_OMPL_DEMO)

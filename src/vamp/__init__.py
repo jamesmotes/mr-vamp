@@ -2,6 +2,7 @@ __all__ = [
     "AnyPlanningResult",
     "png_to_heightfield",
     "configure_robot_and_planner_with_kwargs",
+    "configure_multi_robot_and_planner_with_kwargs",
     "problem_dict_to_vamp",
     "results_to_dict",
     "sphere",
@@ -9,6 +10,7 @@ __all__ = [
     "panda",
     "fetch",
     "baxter",
+    "mr_planning",
     "Environment",
     "Attachment",
     "Sphere",
@@ -52,6 +54,7 @@ from ._core import panda as panda
 from ._core import sphere as sphere
 from ._core import ur5 as ur5
 from ._core import filter_pointcloud as filter_pointcloud
+from ._core import mr_planning as mr_planning
 
 AnyPlanningResult = Union[
     sphere.PlanningResult,

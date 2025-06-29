@@ -61,7 +61,7 @@ namespace vamp::robots::panda
         q = (q - d_s) * d_m;
     }
 
-    template <std::size_t rake>
+    template <std::size_t rake, float base_x, float base_y, float base_z>
     inline void scale_configuration_block(ConfigurationBlock<rake> &q) noexcept
     {
         q[0] = -2.9671f + (q[0] * 5.9342f);
@@ -73,7 +73,7 @@ namespace vamp::robots::panda
         q[6] = -2.9671f + (q[6] * 5.9342f);
     }
 
-    template <std::size_t rake>
+    template <std::size_t rake, float base_x, float base_y, float base_z>
     inline void descale_configuration_block(ConfigurationBlock<rake> &q) noexcept
     {
         q[0] = 0.1685147113342995f * (q[0] - -2.9671f);
@@ -101,9 +101,15 @@ namespace vamp::robots::panda
         FloatVector<rake, 59> r;
     };
 
-    template <std::size_t rake>
+    template <std::size_t rake, int base_x100, int base_y100, int base_z100>
     inline void sphere_fk(const ConfigurationBlock<rake> &q, Spheres<rake> &out) noexcept
     {
+
+        // Convert integer template parameters to float (centimeters to meters)
+        float base_x = static_cast<float>(base_x100) / 100.0f;
+        float base_y = static_cast<float>(base_y100) / 100.0f;
+        float base_z = static_cast<float>(base_z100) / 100.0f;
+
         out.r[0] = 0.08;    // (0, 0)
         out.r[1] = 0.06;    // (0, 0)
         out.r[2] = 0.06;    // (0, 0)
@@ -163,17 +169,17 @@ namespace vamp::robots::panda
         out.r[56] = 0.012;  // (0, 0)
         out.r[57] = 0.012;  // (0, 0)
         out.r[58] = 0.012;  // (0, 0)
-        out.x[0] = 0.0;     // (0, 0)
-        out.x[3] = 0.0;     // (0, 0)
-        out.x[4] = 0.0;     // (0, 0)
-        out.y[0] = 0.0;     // (0, 0)
-        out.y[3] = 0.0;     // (0, 0)
-        out.y[4] = 0.0;     // (0, 0)
-        out.z[0] = 0.05;    // (0, 0)
-        out.z[1] = 0.333;   // (0, 0)
-        out.z[2] = 0.333;   // (0, 0)
-        out.z[3] = 0.213;   // (0, 0)
-        out.z[4] = 0.163;   // (0, 0)
+        out.x[0] = 0.0f + base_x;     // (0, 0)
+        out.x[3] = 0.0f + base_x;     // (0, 0)
+        out.x[4] = 0.0f + base_x;     // (0, 0)
+        out.y[0] = 0.0f + base_y;     // (0, 0)
+        out.y[3] = 0.0f + base_y;     // (0, 0)
+        out.y[4] = 0.0f + base_y;     // (0, 0)
+        out.z[0] = 0.05f + base_z;    // (0, 0)
+        out.z[1] = 0.333f + base_z;   // (0, 0)
+        out.z[2] = 0.333f + base_z;   // (0, 0)
+        out.z[3] = 0.213f + base_z;   // (0, 0)
+        out.z[4] = 0.163f + base_z;   // (0, 0)
         auto INPUT_0 = q[0];
         auto DIV_8 = INPUT_0 * 0.5;
         auto SIN_9 = DIV_8.sin();
@@ -1326,11 +1332,16 @@ namespace vamp::robots::panda
         out.z[58] = ADD_3661;  // (980, 984)
     }
 
-    template <std::size_t rake>
+    template <std::size_t rake, int base_x100, int base_y100, int base_z100>
     inline bool interleaved_sphere_fk(
         const vamp::collision::Environment<FloatVector<rake>> &environment,
         const ConfigurationBlock<rake> &q) noexcept
     {
+
+        float base_x = static_cast<float>(base_x100) / 100.0f;
+        float base_y = static_cast<float>(base_y100) / 100.0f;
+        float base_z = static_cast<float>(base_z100) / 100.0f;
+
         // Ignore static frame collisions - needed for some evaluation problems
         // if (/*panda_link0*/ sphere_environment_in_collision(environment, 0.0, 0.0, 0.05, 0.08))
         // {
@@ -1368,11 +1379,11 @@ namespace vamp::robots::panda
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, 0.0, 0.0, 0.213, 0.06))
+            if (sphere_environment_in_collision(environment, base_x, base_y, 0.213f + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, 0.0, 0.0, 0.163, 0.06))
+            if (sphere_environment_in_collision(environment, base_x, base_y, 0.163f + base_z, 0.06))
             {
                 return false;
             }
@@ -6250,11 +6261,16 @@ namespace vamp::robots::panda
         return true;
     }
 
-    template <std::size_t rake>
+    template <std::size_t rake, int base_x100, int base_y100, int base_z100>
     inline bool interleaved_sphere_fk_attachment(
         const vamp::collision::Environment<FloatVector<rake>> &environment,
         const ConfigurationBlock<rake> &q) noexcept
     {
+
+        float base_x = static_cast<float>(base_x100) / 100.0f;
+        float base_y = static_cast<float>(base_y100) / 100.0f;
+        float base_z = static_cast<float>(base_z100) / 100.0f;
+
         // ignore collision of static link
         // if(/*panda_link0*/ sphere_environment_in_collision(environment, 0.0, 0.0, 0.05, 0.08)){ return
         // false; } // (0, 0)
@@ -6290,11 +6306,11 @@ namespace vamp::robots::panda
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, 0.0, 0.0, 0.213, 0.06))
+            if (sphere_environment_in_collision(environment, base_x, base_y, 0.213f + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, 0.0, 0.0, 0.163, 0.06))
+            if (sphere_environment_in_collision(environment, base_x, base_y, 0.163f + base_z, 0.06))
             {
                 return false;
             }

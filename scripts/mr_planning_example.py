@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """
-Multi-robot planning example using the MR planning framework.
+Multi-robot planning test script using the MR planning framework.
 
-This script demonstrates how to use the multi-robot planning framework
-to plan for multiple Panda robots with different base positions.
+This script tests the multi-robot planning framework with different scenarios:
+- Different base positions for robots
+- Different start/goal configurations for each robot
+- Optional obstacles for testing collision avoidance
+- Multiple test scenarios
 """
 
 import numpy as np
@@ -19,38 +22,154 @@ def create_float_vector_7(values):
         raise ValueError("Expected 7 values for Panda robot configuration")
     return FloatVector7(values)
 
-def main(visualize: bool = True):
-    print("Multi-Robot Planning Example")
-    print("=" * 40)
+def create_test_scenarios():
+    """Create different test scenarios for multi-robot planning."""
     
-    # Create environment (empty for this example)
+    scenarios = {
+        "simple_3_robots": {
+            "name": "Simple 3-Robot Test",
+            "base_positions": [
+                [0.0, 0.0, 0.05],    # Robot 0 at origin
+                [1.0, 0.0, 0.05],    # Robot 1 at x=1
+                [2.0, 0.0, 0.05],    # Robot 2 at x=2
+            ],
+            "starts": [
+                create_float_vector_7([0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]),   # Robot 0
+                create_float_vector_7([0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]),   # Robot 1
+                create_float_vector_7([0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]),   # Robot 2
+            ],
+            "goals": [
+                create_float_vector_7([0.0, 0.785, 0.0, -0.785, 0.0, 1.571, -0.785]),    # Robot 0
+                create_float_vector_7([0.0, 0.785, 0.0, -0.785, 0.0, 1.571, -0.785]),    # Robot 1
+                create_float_vector_7([0.0, 0.785, 0.0, -0.785, 0.0, 1.571, -0.785]),    # Robot 2
+            ],
+            "obstacles": False,
+            "description": "Basic test with 3 robots in a line, same start/goal for all"
+        },
+        
+        "varied_configs": {
+            "name": "Varied Configurations Test",
+            "base_positions": [
+                [0.0, 0.0, 0.05],    # Robot 0 at origin
+                [1.0, 0.0, 0.05],    # Robot 1 at x=1 (fixed: was 1.5)
+                [0.0, 1.0, 0.05],    # Robot 2 at y=1 (fixed: was 1.5)
+            ],
+            "starts": [
+                create_float_vector_7([0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]),   # Robot 0: low arm
+                create_float_vector_7([1.57, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]),  # Robot 1: rotated base
+                create_float_vector_7([0.0, 0.785, 0.0, -0.785, 0.0, 1.571, -0.785]),   # Robot 2: high arm
+            ],
+            "goals": [
+                create_float_vector_7([0.0, 0.785, 0.0, -0.785, 0.0, 1.571, -0.785]),    # Robot 0: high arm
+                create_float_vector_7([-1.57, 0.785, 0.0, -0.785, 0.0, 1.571, -0.785]),  # Robot 1: opposite rotation
+                create_float_vector_7([0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]),    # Robot 2: low arm
+            ],
+            "obstacles": False,
+            "description": "Different start/goal configurations for each robot"
+        },
+        
+        "with_obstacles": {
+            "name": "Obstacle Avoidance Test",
+            "base_positions": [
+                [0.0, 0.0, 0.05],    # Robot 0 at origin
+                [1.0, 0.0, 0.05],    # Robot 1 at x=1
+                [2.0, 0.0, 0.05],    # Robot 2 at x=2
+            ],
+            "starts": [
+                create_float_vector_7([0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]),   # Robot 0
+                create_float_vector_7([0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]),   # Robot 1
+                create_float_vector_7([0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]),   # Robot 2
+            ],
+            "goals": [
+                create_float_vector_7([0.0, 0.785, 0.0, -0.785, 0.0, 1.571, -0.785]),    # Robot 0
+                create_float_vector_7([0.0, 0.785, 0.0, -0.785, 0.0, 1.571, -0.785]),    # Robot 1
+                create_float_vector_7([0.0, 0.785, 0.0, -0.785, 0.0, 1.571, -0.785]),    # Robot 2
+            ],
+            "obstacles": True,
+            "description": "Same as simple test but with obstacles in the workspace"
+        },
+        
+        "complex_4_robots": {
+            "name": "Complex 4-Robot Test",
+            "base_positions": [
+                [0.0, 0.0, 0.05],    # Robot 0 at origin
+                [1.0, 0.0, 0.05],    # Robot 1 at x=1
+                [0.0, 1.0, 0.05],    # Robot 2 at y=1
+                [1.0, 1.0, 0.05],    # Robot 3 at (1,1)
+            ],
+            "starts": [
+                create_float_vector_7([0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]),   # Robot 0
+                create_float_vector_7([1.57, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]),  # Robot 1
+                create_float_vector_7([0.0, 0.785, 0.0, -0.785, 0.0, 1.571, -0.785]),   # Robot 2
+                create_float_vector_7([-1.57, 0.785, 0.0, -0.785, 0.0, 1.571, -0.785]), # Robot 3
+            ],
+            "goals": [
+                create_float_vector_7([0.0, 0.785, 0.0, -0.785, 0.0, 1.571, -0.785]),    # Robot 0
+                create_float_vector_7([-1.57, 0.785, 0.0, -0.785, 0.0, 1.571, -0.785]),  # Robot 1
+                create_float_vector_7([0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]),    # Robot 2
+                create_float_vector_7([1.57, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]),   # Robot 3
+            ],
+            "obstacles": False,
+            "description": "4 robots in a square formation with varied configurations"
+        }
+    }
+    
+    return scenarios
+
+def create_obstacle_environment():
+    """Create an environment with obstacles for testing."""
     env = vamp.Environment()
     
-    # Define robot base positions (in meters)
-    # These correspond to the grid positions supported by the template variants
-    base_positions = [
-        [0.0, 0.0, 0.05],    # Panda_0_0
-        [1.0, 0.0, 0.05],    # Panda_1_0  
-        [2.0, 0.0, 0.05],    # Panda_2_0
+    # Add some spheres as obstacles
+    obstacles = [
+        vamp.Sphere([0.5, 0.0, 0.3], 0.2),    # Center obstacle
+        vamp.Sphere([1.5, 0.0, 0.3], 0.2),    # Right obstacle
+        vamp.Sphere([0.0, 0.5, 0.3], 0.15),   # Back obstacle
     ]
     
-    print(f"Planning for {len(base_positions)} robots")
+    for obstacle in obstacles:
+        env.add_sphere(obstacle)
+    
+    return env
+
+def interpolate_path_to_resolution(path, resolution=32):
+    """Interpolate path to the specified resolution (integer)."""
+    if len(path) < 2:
+        return path
+    
+    # Convert to vamp planning Path type
+    vamp_path = vamp.planning.Path[7]()  # 7 for Panda dimension
+    for config in path:
+        vamp_path.append(config)
+    
+    # Interpolate to resolution
+    vamp_path.interpolate_to_resolution(resolution)
+    
+    # Convert back to list
+    return [vamp_path[i] for i in range(len(vamp_path))]
+
+def run_scenario(scenario_name, scenario_data, visualize=True):
+    """Run a specific test scenario."""
+    print(f"\n{'='*60}")
+    print(f"Running Scenario: {scenario_data['name']}")
+    print(f"{'='*60}")
+    print(f"Description: {scenario_data['description']}")
+    
+    # Create environment
+    if scenario_data['obstacles']:
+        env = create_obstacle_environment()
+        print("Environment: With obstacles")
+    else:
+        env = vamp.Environment()
+        print("Environment: Empty")
+    
+    base_positions = scenario_data['base_positions']
+    starts = scenario_data['starts']
+    goals = scenario_data['goals']
+    
+    print(f"Number of robots: {len(base_positions)}")
     for i, pos in enumerate(base_positions):
         print(f"  Robot {i}: base position {pos}")
-    
-    # Define start and goal configurations for each robot
-    # Using simple configurations that should be reachable
-    starts = [
-        create_float_vector_7([0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]),  # Robot 0
-        create_float_vector_7([0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]),  # Robot 1
-        create_float_vector_7([0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]),  # Robot 2
-    ]
-    
-    goals = [
-        create_float_vector_7([0.0, 0.785, 0.0, -0.785, 0.0, 1.571, -0.785]),   # Robot 0
-        create_float_vector_7([0.0, 0.785, 0.0, -0.785, 0.0, 1.571, -0.785]),   # Robot 1
-        create_float_vector_7([0.0, 0.785, 0.0, -0.785, 0.0, 1.571, -0.785]),   # Robot 2
-    ]
     
     print("\nStart configurations:")
     for i, start in enumerate(starts):
@@ -66,17 +185,18 @@ def main(visualize: bool = True):
     settings.enable_inter_robot_collision_checking = False  # Ignore inter-robot collisions for demo
     settings.enable_parallel_roadmap_construction = True
     
-    print(f"\nUsing algorithm: {settings.algorithm}")
-    print(f"Inter-robot collision checking: {settings.enable_inter_robot_collision_checking}")
-    print(f"Parallel roadmap construction: {settings.enable_parallel_roadmap_construction}")
+    print(f"\nSettings:")
+    print(f"  Algorithm: {settings.algorithm}")
+    print(f"  Inter-robot collision checking: {settings.enable_inter_robot_collision_checking}")
+    print(f"  Parallel roadmap construction: {settings.enable_parallel_roadmap_construction}")
     
     try:
-        # Method 1: Use the helper function
-        print("\n" + "="*40)
-        print("Method 1: Using create_mr_problem and solve_mr_problem helper functions")
-        print("="*40)
+        # Create and solve the problem
+        print(f"\n{'='*40}")
+        print("Planning")
+        print(f"{'='*40}")
         
-        # Create the problem first
+        # Create the problem
         problem = create_mr_problem(base_positions, starts, goals, env, settings)
         print(f"Created problem with {problem.num_robots()} robots")
         
@@ -90,153 +210,117 @@ def main(visualize: bool = True):
         print(f"Planning time: {result.nanoseconds / 1e6:.2f} ms")
         print(f"Iterations: {result.iterations}")
         
+        print("\nPath details:")
         for i, path in enumerate(result.robot_paths):
             print(f"  Robot {i}: {len(path)} waypoints")
             if path:
                 print(f"    Start: {path[0].to_list()}")
                 print(f"    End: {path[len(path)-1].to_list()}")
         
-        # Method 2: Create planner directly
-        print("\n" + "="*40)
-        print("Method 2: Creating planner directly")
-        print("="*40)
+        # Store result for visualization
+        result_for_viz = result
         
-        planner = create_dummy_planner(base_positions, env, settings)
-        
-        # Build roadmaps first
-        print("Building roadmaps...")
-        planner.build_roadmaps(starts, goals)
-        
-        if planner.are_roadmaps_built():
-            print("Roadmaps built successfully")
-            print(f"Roadmap build time: {planner.get_roadmap_build_time_ns() / 1e6:.2f} ms")
-        else:
-            print("Failed to build roadmaps")
-            return
-        
-        # Solve the planning problem
-        print("Solving planning problem...")
-        result2 = planner.solve(starts, goals)
-        
-        print(f"Planning successful: {result2.success}")
-        print(f"Algorithm used: {result2.algorithm_name}")
-        print(f"Total cost: {result2.total_cost}")
-        print(f"Planning time: {result2.nanoseconds / 1e6:.2f} ms")
-        print(f"Iterations: {result2.iterations}")
-        
-        for i, path in enumerate(result2.robot_paths):
-            print(f"  Robot {i}: {len(path)} waypoints")
-            if path:
-                print(f"    Start: {path[0].to_list()}")
-                print(f"    End: {path[len(path)-1].to_list()}")
-        
-        # Verify results are the same
-        print("\n" + "="*40)
-        print("Verification")
-        print("="*40)
-        
-        if result.success == result2.success and len(result.robot_paths) == len(result2.robot_paths):
-            print("✓ Both methods produced consistent results")
+        # Visualize results
+        if visualize:
+            print(f"\nVisualizing {scenario_name}...")
             
-            # Check if paths are identical
-            paths_match = True
-            for i, (path1, path2) in enumerate(zip(result.robot_paths, result2.robot_paths)):
-                if len(path1) != len(path2):
-                    paths_match = False
-                    break
-                for j, (wp1, wp2) in enumerate(zip(path1, path2)):
-                    if wp1.to_list() != wp2.to_list():
-                        paths_match = False
-                        break
-                if not paths_match:
-                    break
+            # Convert paths to visualization format and interpolate
+            robot_paths = []
+            for i, path in enumerate(result_for_viz.robot_paths):
+                if path:
+                    # Interpolate path to robot resolution for smooth visualization
+                    interpolated_path = interpolate_path_to_resolution(path, resolution=32)
+                    robot_paths.append(interpolated_path)
+                else:
+                    robot_paths.append([])
             
-            if paths_match:
-                print("✓ Paths are identical between methods")
-            else:
-                print("⚠ Paths differ between methods (this is expected for some algorithms)")
-        else:
-            print("✗ Results are inconsistent between methods")
-        
-        # Visualization
-        if visualize and result.success:
-            print("\n" + "="*40)
-            print("Visualization")
-            print("="*40)
-            
-            from vamp import pybullet_interface as vpb
-            from pathlib import Path
-            
-            # Create simulator
-            robot_dir = Path(__file__).parent.parent / 'resources' / 'panda'
-            sim = vpb.PyBulletSimulator(
-                str(robot_dir / "panda_spherized.urdf"), 
-                vamp.ROBOT_JOINTS['panda'], 
-                visualize=True
+            # Create multi-robot animation
+            vamp.animate_multiple_robots(
+                robot_paths=robot_paths,
+                robot_types=['panda'] * len(robot_paths),
+                base_positions=scenario_data['base_positions'],
+                environment=env,
+                title=f"Multi-Robot Planning: {scenario_name}"
             )
-            
-            # Set up first robot at origin
-            first_robot_id = sim.skel_id
-            sim.set_robot_base_position(base_positions[0])
-            print(f"Main robot at position {base_positions[0]}")
-            
-            # Load additional robots at different positions
-            robot_ids = [first_robot_id]
-            for i, (x, y, z) in enumerate(base_positions[1:], 2):
-                new_robot_id = sim.client.loadURDF(
-                    str(robot_dir / "panda_spherized.urdf"),
-                    basePosition=(x, y, z),
-                    baseOrientation=(0, 0, 0, 1),
-                    useFixedBase=True,
-                    flags=sim.client.URDF_MAINTAIN_LINK_ORDER | sim.client.URDF_USE_SELF_COLLISION
-                )
-                robot_ids.append(new_robot_id)
-                sim.add_robot(new_robot_id, sim.joints, f"Robot_{i}")
-                print(f"Robot {i} at position ({x}, {y}, {z})")
-            
-            # Debug: Check the original paths
-            print("\nDebug: Original paths from multi-robot planning:")
-            any_empty = False
-            for i, path in enumerate(result.robot_paths):
-                print(f"  Robot {i}: {len(path)} waypoints")
-                if len(path) == 0:
-                    print(f"  WARNING: Robot {i} has an empty plan!")
-                    any_empty = True
-                elif path:
-                    print(f"    Start: {path[0].to_list()}")
-                    print(f"    End: {path[len(path)-1].to_list()}")
-            if any_empty:
-                print("\nERROR: One or more robot plans are empty. Multi-robot animation will not run.")
-                return
-            
-            # Convert paths to the format expected by the visualization system
-            # The visualization expects paths with Configuration objects, not FloatVector7
-            Path = vamp.panda.Path
-            Configuration = vamp.panda.Configuration
-            
-            robot_plans = {}
-            for i, (robot_id, path) in enumerate(zip(robot_ids, result.robot_paths)):
-                print(f"Converting path for robot {i} (ID: {robot_id})")
-                
-                # Convert FloatVector7 path to Configuration path
-                panda_path = Path()
-                for waypoint in path:
-                    panda_path.append(Configuration(waypoint.to_list()))
-                
-                robot_plans[robot_id] = panda_path
-                print(f"  Converted: {len(panda_path)} waypoints")
-            
-            print(f"\nStarting multi-robot animation with {len(robot_plans)} robots...")
-            print("Controls: Space=pause/play, Left/Right=step, Q=quit")
-            
-            # Start the animation
-            sim.animate_multi(robot_plans)
+        
+        return result.success
         
     except Exception as e:
         print(f"Error during planning: {e}")
         import traceback
         traceback.print_exc()
+        return False
+
+def main(scenario_name=None, visualize=True):
+    """Main function to run multi-robot planning tests."""
+    print("Multi-Robot Planning Test Suite")
+    print("=" * 60)
+    
+    # Get all available scenarios
+    scenarios = create_test_scenarios()
+    
+    if scenario_name is None:
+        # Run all scenarios
+        print(f"Running all {len(scenarios)} scenarios...")
+        results = {}
+        
+        for name, data in scenarios.items():
+            success = run_scenario(name, data, visualize)
+            results[name] = success
+            
+            if not success:
+                print(f"⚠ Scenario '{name}' failed!")
+            else:
+                print(f"✓ Scenario '{name}' completed successfully!")
+        
+        # Summary
+        print(f"\n{'='*60}")
+        print("Test Summary")
+        print(f"{'='*60}")
+        for name, success in results.items():
+            status = "✓ PASS" if success else "✗ FAIL"
+            print(f"{status} {scenarios[name]['name']}")
+        
+        passed = sum(results.values())
+        total = len(results)
+        print(f"\nOverall: {passed}/{total} scenarios passed")
+        
+    elif scenario_name in scenarios:
+        # Run specific scenario
+        success = run_scenario(scenario_name, scenarios[scenario_name], visualize)
+        if success:
+            print(f"\n✓ Scenario '{scenario_name}' completed successfully!")
+        else:
+            print(f"\n✗ Scenario '{scenario_name}' failed!")
+    else:
+        print(f"Unknown scenario: {scenario_name}")
+        print(f"Available scenarios: {list(scenarios.keys())}")
 
 if __name__ == "__main__":
-    import fire
-    fire.Fire(main) 
+    import sys
+    
+    # Parse command line arguments
+    scenario = None
+    visualize = True
+    
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "--help" or sys.argv[1] == "-h":
+            print("Usage: python mr_planning_example.py [scenario_name] [--no-viz]")
+            print("\nAvailable scenarios:")
+            scenarios = create_test_scenarios()
+            for name, data in scenarios.items():
+                print(f"  {name}: {data['name']}")
+            print("\nExamples:")
+            print("  python mr_planning_example.py                    # Run all scenarios")
+            print("  python mr_planning_example.py simple_3_robots   # Run specific scenario")
+            print("  python mr_planning_example.py --no-viz          # Run without visualization")
+            sys.exit(0)
+        elif sys.argv[1] == "--no-viz":
+            visualize = False
+        else:
+            scenario = sys.argv[1]
+    
+    if len(sys.argv) > 2 and sys.argv[2] == "--no-viz":
+        visualize = False
+    
+    main(scenario, visualize) 

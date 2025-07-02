@@ -36,7 +36,7 @@ namespace vamp::robots
     };
 
     // Default variant (backward compatibility)
-    struct Panda : PandaBase<0, 0, 0> {
+    struct Panda : PandaBase<200, 200, 0> {
         static constexpr auto name = "panda";
     };
 }  // namespace vamp::robots 

@@ -1342,11 +1342,23 @@ namespace vamp::robots::panda
         float base_y = static_cast<float>(base_y100) / 100.0f;
         float base_z = static_cast<float>(base_z100) / 100.0f;
 
-        // Ignore static frame collisions - needed for some evaluation problems
-        // if (/*panda_link0*/ sphere_environment_in_collision(environment, 0.0 + base_x, 0.0 + base_y, 0.05 + base_z, 0.08))
-        // {
-        //     return false;
-        // }  // (0, 0)
+        // Check base (link0) bounding sphere first
+        if (/*panda_link0*/ sphere_environment_in_collision(environment, 0.0 + base_x, 0.0 + base_y, 0.122 + base_z, 0.152))
+        {
+            // Check individual base spheres if bounding sphere is in collision
+            if (sphere_environment_in_collision(environment, 0.0 + base_x, 0.0 + base_y, 0.05 + base_z, 0.08))
+            {
+                return false;
+            }
+            if (sphere_environment_in_collision(environment, 0.0 + base_x, 0.0 + base_y, 0.213 + base_z, 0.06))
+            {
+                return false;
+            }
+            if (sphere_environment_in_collision(environment, 0.0 + base_x, 0.0 + base_y, 0.163 + base_z, 0.06))
+            {
+                return false;
+            }
+        }  // (0, 0)
         auto INPUT_0 = q[0];
         auto DIV_8 = INPUT_0 * 0.5;
         auto SIN_9 = DIV_8.sin();
@@ -1369,8 +1381,10 @@ namespace vamp::robots::panda
         auto MUL_1680 = MUL_1594 * 0.03;
         auto MUL_1683 = SUB_1587 * 0.03;
         auto NEGATE_1684 = -MUL_1683;
+        
         if (/*panda_link1*/ sphere_environment_in_collision(environment, SUB_1641 + base_x, NEGATE_1643 + base_y, 0.248 + base_z, 0.154))
         {
+            
             if (sphere_environment_in_collision(environment, MUL_1656 + base_x, NEGATE_1660 + base_y, 0.333 + base_z, 0.06))
             {
                 return false;
@@ -6271,9 +6285,25 @@ namespace vamp::robots::panda
         float base_y = static_cast<float>(base_y100) / 100.0f;
         float base_z = static_cast<float>(base_z100) / 100.0f;
 
-        // ignore collision of static link
-        // if(/*panda_link0*/ sphere_environment_in_collision(environment, 0.0 + base_x, 0.0 + base_y, 0.05 + base_z, 0.08)){ return
-        // false; } // (0, 0)
+        // Check collision of static link
+        // Check base (link0) bounding sphere first
+        if (/*panda_link0*/ sphere_environment_in_collision(environment, 0.0 + base_x, 0.0 + base_y, 0.122 + base_z, 0.152))
+        {
+            // Check individual base spheres if bounding sphere is in collision
+            if (sphere_environment_in_collision(environment, 0.0 + base_x, 0.0 + base_y, 0.05 + base_z, 0.08))
+            {
+                return false;
+            }
+            if (sphere_environment_in_collision(environment, 0.0 + base_x, 0.0 + base_y, 0.213 + base_z, 0.06))
+            {
+                return false;
+            }
+            if (sphere_environment_in_collision(environment, 0.0 + base_x, 0.0 + base_y, 0.163 + base_z, 0.06))
+            {
+                return false;
+            }
+        }  // (0, 0)
+
         auto INPUT_0 = q[0];
         auto DIV_8 = INPUT_0 * 0.5;
         auto SIN_9 = DIV_8.sin();

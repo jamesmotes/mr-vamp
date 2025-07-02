@@ -11,7 +11,7 @@
 #include <vamp/robots/panda_base.hh>
 #include <vamp/random/halton.hh>
 
-using Robot = vamp::robots::PandaBase<0,0,0>;
+using Robot = vamp::robots::PandaBase<200,200,200>;
 static constexpr const std::size_t rake = vamp::FloatVectorWidth;
 using EnvironmentInput = vamp::collision::Environment<float>;
 using EnvironmentVector = vamp::collision::Environment<vamp::FloatVector<rake>>;

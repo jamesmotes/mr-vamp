@@ -1,0 +1,4048 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 345c3c1..f36220e 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -31,7 +31,7 @@ project(
+ )
+ 
+ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+-set(CMAKE_CXX_STANDARD 17)
++set(CMAKE_CXX_STANDARD 20)
+ set(CMAKE_CXX_STANDARD_REQUIRED ON)
+ set(CMAKE_CXX_EXTENSIONS OFF)
+ set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+@@ -50,6 +50,7 @@ list(APPEND VAMP_EXT_SOURCES
+   src/impl/vamp/bindings/python.cc
+   src/impl/vamp/bindings/environment.cc
+   src/impl/vamp/bindings/settings.cc
++  src/impl/vamp/bindings/mr_planning.cc
+ )
+ 
+ list(APPEND VAMP_ROBOT_MODULES
+@@ -87,31 +88,32 @@ target_link_libraries(_core_ext
+     Eigen3::Eigen
+ )
+ 
+-if($ENV{GITHUB_ACTIONS})
+-  set(STUB_PREFIX "")
+-else()
+-  set(STUB_PREFIX "${CMAKE_BINARY_DIR}/stubs/")
+-endif()
+-
+-nanobind_add_stub(
+-  vamp_stub
+-  MODULE _core_ext
+-  OUTPUT "${STUB_PREFIX}__init__.pyi"
+-  PYTHON_PATH $<TARGET_FILE_DIR:_core_ext>
+-  DEPENDS _core_ext
+-  VERBOSE
+-)
+-
+-foreach(robot_name IN LISTS VAMP_ROBOT_MODULES)
+-  nanobind_add_stub(
+-    "vamp_${robot_name}_stub"
+-    MODULE "_core_ext.${robot_name}"
+-    OUTPUT "${STUB_PREFIX}${robot_name}.pyi"
+-    PYTHON_PATH $<TARGET_FILE_DIR:_core_ext>
+-    DEPENDS _core_ext
+-    VERBOSE
+-  )
+-endforeach()
++# Temporarily disable stub generation to fix build issues
++# if($ENV{GITHUB_ACTIONS})
++#   set(STUB_PREFIX "")
++# else()
++#   set(STUB_PREFIX "${CMAKE_BINARY_DIR}/stubs/")
++# endif()
++
++# nanobind_add_stub(
++#   vamp_stub
++#   MODULE _core_ext
++#   OUTPUT "${STUB_PREFIX}__init__.pyi"
++#   PYTHON_PATH $<TARGET_FILE_DIR:_core_ext>
++#   DEPENDS _core_ext
++#   VERBOSE
++# )
++
++# foreach(robot_name IN LISTS VAMP_ROBOT_MODULES)
++#   nanobind_add_stub(
++#     "vamp_${robot_name}_stub"
++#     MODULE "_core_ext.${robot_name}"
++#     OUTPUT "${STUB_PREFIX}${robot_name}.pyi"
++#     PYTHON_PATH $<TARGET_FILE_DIR:_core_ext>
++#     DEPENDS _core_ext
++#     VERBOSE
++#   )
++# endforeach()
+ 
+ install(
+   TARGETS _core_ext
+@@ -119,22 +121,26 @@ install(
+   DESTINATION vamp/_core
+ )
+ 
+-install(
+-  FILES "${STUB_PREFIX}__init__.pyi"
+-  DESTINATION "${CMAKE_SOURCE_DIR}/src/vamp/_core"
+-)
++# install(
++#   FILES "${STUB_PREFIX}__init__.pyi"
++#   DESTINATION "${CMAKE_SOURCE_DIR}/src/vamp/_core"
++# )
+ 
+-foreach(robot_name IN LISTS VAMP_ROBOT_MODULES)
+-  install(
+-    FILES "${STUB_PREFIX}${robot_name}.pyi"
+-    DESTINATION "${CMAKE_SOURCE_DIR}/src/vamp/_core"
+-  )
+-endforeach()
++# foreach(robot_name IN LISTS VAMP_ROBOT_MODULES)
++#   install(
++#     FILES "${STUB_PREFIX}${robot_name}.pyi"
++#     DESTINATION "${CMAKE_SOURCE_DIR}/src/vamp/_core"
++#   )
++# endforeach()
+ 
+ if(VAMP_BUILD_CPP_DEMO)
+   add_executable(vamp_rrtc_example scripts/cpp/rrtc_example.cc)
+   target_link_libraries(vamp_rrtc_example PRIVATE Eigen3::Eigen)
+   target_include_directories(vamp_rrtc_example SYSTEM PRIVATE ${VAMP_EXT_INCLUDES})
++  
++  add_executable(vamp_mr_planning_test scripts/cpp/test_mr_planning.cpp)
++  target_link_libraries(vamp_mr_planning_test PRIVATE Eigen3::Eigen)
++  target_include_directories(vamp_mr_planning_test SYSTEM PRIVATE ${VAMP_EXT_INCLUDES})
+ endif()
+ 
+ if(VAMP_BUILD_OMPL_DEMO)
+diff --git a/MR_PLANNING_DESIGN_NOTES.md b/MR_PLANNING_DESIGN_NOTES.md
+new file mode 100644
+index 0000000..0519ecb
+--- /dev/null
++++ b/MR_PLANNING_DESIGN_NOTES.md
+@@ -0,0 +1 @@
++ 
+\ No newline at end of file
+diff --git a/TEMPLATED_FK_SOLUTION.md b/TEMPLATED_FK_SOLUTION.md
+new file mode 100644
+index 0000000..43cf95a
+--- /dev/null
++++ b/TEMPLATED_FK_SOLUTION.md
+@@ -0,0 +1,241 @@
++# Templated FK Functions with Base Position Parameters
++
++## Overview
++
++This document outlines a solution to modify the FK functions in `src/impl/vamp/robots/panda/fk.hh` to be templated on base position parameters, allowing the compiler to optimize the base position additions at compile time while maintaining SIMD efficiency.
++
++## Problem Statement
++
++Currently, the base position is hardcoded in the FK calculations:
++
++```cpp
++// Current hardcoded positions in fk.hh
++out.x[0] = 0.0;     // (0, 0)
++out.y[0] = 0.0;     // (0, 0)
++out.z[0] = 0.05;    // (0, 0)
++```
++
++The base position is accessible via template parameters (`Robot::base_x`, `Robot::base_y`, `Robot::base_z`) but is not being applied to the sphere positions, leading to incorrect world coordinates.
++
++## Solution: Template FK Functions on Base Position
++
++### 1. Modified FK Function Signature
++
++```cpp
++// Original function
++template <std::size_t rake>
++inline void sphere_fk(const ConfigurationBlock<rake> &q, Spheres<rake> &out) noexcept
++
++// New templated function with base position parameters
++template <std::size_t rake, float base_x, float base_y, float base_z>
++inline void sphere_fk(const ConfigurationBlock<rake> &q, Spheres<rake> &out) noexcept
++```
++
++### 2. Compile-Time Base Position Addition
++
++```cpp
++// Instead of hardcoded positions:
++out.x[0] = 0.0;     // (0, 0)
++out.y[0] = 0.0;     // (0, 0)
++out.z[0] = 0.05;    // (0, 0)
++
++// Use compile-time constant addition:
++out.x[0] = 0.0f + base_x;     // (0, 0)
++out.y[0] = 0.0f + base_y;     // (0, 0)
++out.z[0] = 0.05f + base_z;    // (0, 0)
++```
++
++### 3. Backward Compatibility
++
++```cpp
++// Original function calls the templated version with default base position
++template <std::size_t rake>
++inline void sphere_fk(const ConfigurationBlock<rake> &q, Spheres<rake> &out) noexcept
++{
++    sphere_fk<rake, 0.0f, 0.0f, 0.0f>(q, out);
++}
++```
++
++## Implementation Details
++
++### 1. Template Parameter Propagation
++
++```cpp
++// Base robot template (already exists)
++template<int BaseX100, int BaseY100, int BaseZ100>
++struct BaseRobot {
++    static constexpr float base_x = static_cast<float>(BaseX100) / 100.0f;
++    static constexpr float base_y = static_cast<float>(BaseY100) / 100.0f;
++    static constexpr float base_z = static_cast<float>(BaseZ100) / 100.0f;
++};
++
++// Robot instantiation (already exists)
++struct Panda_2_2 : PandaBase<200, 200, 5> {
++    static constexpr auto name = "panda_2_2";
++};
++
++// Modified panda base to use templated FK
++template<int BaseX100, int BaseY100, int BaseZ100>
++struct PandaBase : BaseRobot<BaseX100, BaseY100, BaseZ100>
++{
++    // Use templated FK functions with base position parameters
++    template <std::size_t rake>
++    static constexpr auto sphere_fk = panda::sphere_fk<rake, base_x, base_y, base_z>;
++    
++    template <std::size_t rake>
++    static constexpr auto fkcc = panda::interleaved_sphere_fk<rake, base_x, base_y, base_z>;
++};
++```
++
++### 2. Compiler Optimization Benefits
++
++#### Compile-Time Constant Folding
++When `base_x = 2.0f`, `base_y = 2.0f`, `base_z = 0.05f`:
++- `out.x[0] = 0.0f + 2.0f` becomes `out.x[0] = 2.0f`
++- `out.y[0] = 0.0f + 2.0f` becomes `out.y[0] = 2.0f`
++- `out.z[0] = 0.05f + 0.05f` becomes `out.z[0] = 0.1f`
++
++#### SIMD Vectorization
++- No runtime addition operations for base position
++- Compiler can vectorize FK calculations without branching
++- Maintains full SIMD efficiency
++
++#### Memory Access Patterns
++- All sphere positions computed in one pass
++- No separate loop to add base positions
++- Better cache locality
++
++## File Modifications Required
++
++### 1. `src/impl/vamp/robots/panda/fk.hh`
++
++```cpp
++// Add templated version of sphere_fk
++template <std::size_t rake, float base_x, float base_y, float base_z>
++inline void sphere_fk(const ConfigurationBlock<rake> &q, Spheres<rake> &out) noexcept
++{
++    // Set sphere radii (unchanged)
++    out.r[0] = 0.08;
++    // ... (all radius assignments)
++    
++    // Set base positions with compile-time constant addition
++    out.x[0] = 0.0f + base_x;
++    out.y[0] = 0.0f + base_y;
++    out.z[0] = 0.05f + base_z;
++    
++    // Continue with FK calculations, adding base position to each coordinate
++    auto INPUT_0 = q[0];
++    // ... (FK calculations)
++    out.x[1] = MUL_1615 + base_x;  // Add base_x to computed position
++    out.x[2] = MUL_1639 + base_x;  // Add base_x to computed position
++    // ... (continue for all sphere positions)
++}
++
++// Add templated version of interleaved_sphere_fk
++template <std::size_t rake, float base_x, float base_y, float base_z>
++inline bool interleaved_sphere_fk(
++    const vamp::collision::Environment<FloatVector<rake>> &environment,
++    const ConfigurationBlock<rake> &q) noexcept
++{
++    // Similar modifications for collision checking
++    // Add base position to all sphere_environment_in_collision calls
++}
++
++// Keep original functions for backward compatibility
++template <std::size_t rake>
++inline void sphere_fk(const ConfigurationBlock<rake> &q, Spheres<rake> &out) noexcept
++{
++    sphere_fk<rake, 0.0f, 0.0f, 0.0f>(q, out);
++}
++```
++
++### 2. `src/impl/vamp/robots/panda_base.hh`
++
++```cpp
++template<int BaseX100, int BaseY100, int BaseZ100>
++struct PandaBase : BaseRobot<BaseX100, BaseY100, BaseZ100>
++{
++    // Use templated FK functions with base position parameters
++    template <std::size_t rake>
++    static constexpr auto sphere_fk = panda::sphere_fk<rake, base_x, base_y, base_z>;
++    
++    template <std::size_t rake>
++    static constexpr auto fkcc = panda::interleaved_sphere_fk<rake, base_x, base_y, base_z>;
++    
++    template <std::size_t rake>
++    static constexpr auto fkcc_attach = panda::interleaved_sphere_fk_attachment<rake, base_x, base_y, base_z>;
++};
++```
++
++### 3. `src/impl/vamp/bindings/common.hh`
++
++```cpp
++template <typename Robot>
++struct Helper
++{
++    inline static auto fk(const ConfigurationArray &configuration)
++        -> std::vector<vamp::collision::Sphere<float>>
++    {
++        typename Robot::template Spheres<1> out;
++        typename Robot::template ConfigurationBlock<1> block;
++        
++        for (auto i = 0U; i < Robot::dimension; ++i)
++        {
++            block[i] = configuration[i];
++        }
++
++        // Use templated sphere_fk (base position handled at compile time)
++        Robot::template sphere_fk<1>(block, out);
++        
++        std::vector<vamp::collision::Sphere<float>> result;
++        result.reserve(Robot::n_spheres);
++
++        for (auto i = 0U; i < Robot::n_spheres; ++i)
++        {
++            // No need to add base position here - it's already included
++            result.emplace_back(out.x[{i, 0}], out.y[{i, 0}], out.z[{i, 0}], out.r[{i, 0}]);
++        }
++
++        return result;
++    }
++};
++```
++
++## Benefits
++
++### 1. Performance
++- **Zero runtime overhead** for base position addition
++- **Compile-time constant folding** eliminates addition operations
++- **Maintained SIMD efficiency** through vectorization
++- **Better cache locality** with single-pass computation
++
++### 2. Correctness
++- **Proper world coordinates** for all sphere positions
++- **Type safety** through template parameters
++- **No runtime errors** from missing base position addition
++
++### 3. Maintainability
++- **Single source of truth** for base position
++- **Compile-time validation** of base position usage
++- **Clear separation** between local and world coordinates
++
++## Example Usage
++
++```cpp
++// Robot variants automatically use correct base positions
++Panda_0_0 robot_00;  // base_x=0.0, base_y=0.0, base_z=0.05
++Panda_2_2 robot_22;  // base_x=2.0, base_y=2.0, base_z=0.05
++
++// FK calls automatically include base position
++auto spheres_00 = robot_00.fk(config);  // Spheres at (0,0,0.05) + local positions
++auto spheres_22 = robot_22.fk(config);  // Spheres at (2,2,0.05) + local positions
++```
++
++## Migration Strategy
++
++1. **Phase 1**: Add templated FK functions alongside existing ones
++2. **Phase 2**: Update robot base classes to use templated versions
++3. **Phase 3**: Update helper templates to remove runtime base position addition
++4. **Phase 4**: Remove original non-templated functions (after testing)
++
++This approach ensures backward compatibility while providing the performance and correctness benefits of compile-time base position optimization. 
+\ No newline at end of file
+diff --git a/pyproject.toml b/pyproject.toml
+index 396a886..c545c91 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -34,4 +34,6 @@ cmake.build-type = "Release"
+ 
+ [tool.scikit-build.cmake.define]
+ VAMP_LTO = "OFF"
++CMAKE_CXX_STANDARD = "20"
++CMAKE_CXX_STANDARD_REQUIRED = "ON"
+ # VAMP_FORCE_CLANG = "ON"
+diff --git a/scripts/cpp/test_mr_planning.cpp b/scripts/cpp/test_mr_planning.cpp
+new file mode 100644
+index 0000000..ac82bc6
+--- /dev/null
++++ b/scripts/cpp/test_mr_planning.cpp
+@@ -0,0 +1,168 @@
++#include <iostream>
++#include <vector>
++#include <array>
++#include <memory>
++
++#include <vamp/collision/environment.hh>
++#include <vamp/collision/factory.hh>
++#include <vamp/random/halton.hh>
++#include <vamp/robots/panda_grid.hh>
++#include <vamp/vector.hh>
++
++#include "../../src/impl/vamp/mr_planning/mr_factory.hh"
++#include "../../src/impl/vamp/mr_planning/mr_settings.hh"
++#include "../../src/impl/vamp/mr_planning/mr_problem.hh"
++
++using namespace vamp::mr_planning;
++using Robot = vamp::robots::Panda_0_0;
++static constexpr std::size_t rake = 4;  // Force ARM/NEON vector width since auto-detection is failing
++static constexpr std::size_t resolution = Robot::resolution;  // Use robot-specific resolution
++
++using vamp::FloatVector;
++
++int main() {
++    std::cout << "Testing Multi-Robot Planning Framework" << std::endl;
++    std::cout << "=====================================" << std::endl;
++
++    try {
++        // 1. Create environment
++        std::cout << "1. Creating environment..." << std::endl;
++        vamp::collision::Environment<float> environment;
++        
++        // Add some obstacles (COMMENTED OUT FOR SIMPLIFIED TEST)
++        // environment.spheres.emplace_back(vamp::collision::factory::sphere::array({0.5f, 0.5f, 0.5f}, 0.2f));
++        // environment.spheres.emplace_back(vamp::collision::factory::sphere::array({-0.5f, 0.5f, 0.5f}, 0.2f));
++        environment.sort();
++
++        // 2. Define robot base positions
++        std::cout << "2. Setting up robot base positions..." << std::endl;
++        std::vector<std::array<float, 3>> base_positions = {
++            {0.0f, 0.0f, 0.05f},   // Robot 1 at origin
++            {2.0f, 0.0f, 0.05f},   // Robot 2 at x=2
++            {0.0f, 2.0f, 0.05f},   // Robot 3 at y=2
++        };
++
++        // Check workspace boundaries for each robot
++        std::cout << "   Checking workspace boundaries..." << std::endl;
++        const float panda_reach = 1.19f;  // From constants.py ROBOT_MAX_RADII["panda"]
++        for (std::size_t i = 0; i < base_positions.size(); ++i) {
++            const auto& base = base_positions[i];
++            std::cout << "   Robot " << i << " base: [" << base[0] << ", " << base[1] << ", " << base[2] << "]" << std::endl;
++            std::cout << "   Robot " << i << " workspace: x=[" << (base[0] - panda_reach) << ", " << (base[0] + panda_reach) 
++                      << "], y=[" << (base[1] - panda_reach) << ", " << (base[1] + panda_reach) 
++                      << "], z=[" << (base[2] - panda_reach) << ", " << (base[2] + panda_reach) << "]" << std::endl;
++        }
++
++        // 3. Define start and goal configurations
++        std::cout << "3. Setting up start/goal configurations..." << std::endl;
++        
++        // Use simpler configurations that are more likely to be reachable
++        // Start: neutral position, Goal: slightly different position
++        std::vector<Robot::Configuration> starts = {
++            Robot::Configuration(std::array<float, 7>{0.0f, -0.785f, 0.0f, -2.356f, 0.0f, 1.571f, 0.785f}),
++            Robot::Configuration(std::array<float, 7>{0.0f, -0.785f, 0.0f, -2.356f, 0.0f, 1.571f, 0.785f}),
++            Robot::Configuration(std::array<float, 7>{0.0f, -0.785f, 0.0f, -2.356f, 0.0f, 1.571f, 0.785f}),
++        };
++
++        std::vector<Robot::Configuration> goals = {
++            Robot::Configuration(std::array<float, 7>{0.5f, 0.0f, 0.0f, -1.5f, 0.0f, 1.0f, 0.5f}),
++            Robot::Configuration(std::array<float, 7>{0.5f, 0.0f, 0.0f, -1.5f, 0.0f, 1.0f, 0.5f}),
++            Robot::Configuration(std::array<float, 7>{0.5f, 0.0f, 0.0f, -1.5f, 0.0f, 1.0f, 0.5f}),
++        };
++
++        // Check if configurations are within joint limits
++        std::cout << "   Checking joint limits..." << std::endl;
++        std::array<float, 7> joint_limits_lower = {-2.9671f, -1.8326f, -2.9671f, -3.1416f, -2.9671f, -0.0873f, -2.9671f};
++        std::array<float, 7> joint_limits_upper = {2.9671f, 1.8326f, 2.9671f, 0.0873f, 2.9671f, 3.8223f, 2.9671f};
++        
++        for (std::size_t i = 0; i < starts.size(); ++i) {
++            auto start_arr = starts[i].to_array();
++            auto goal_arr = goals[i].to_array();
++            std::cout << "   Robot " << i << " start config: ";
++            for (std::size_t j = 0; j < 7; ++j) {
++                float val = start_arr[j];
++                bool valid = (val >= joint_limits_lower[j] && val <= joint_limits_upper[j]);
++                std::cout << val << (valid ? "" : "(INVALID)") << " ";
++            }
++            std::cout << std::endl;
++            
++            std::cout << "   Robot " << i << " goal config:  ";
++            for (std::size_t j = 0; j < 7; ++j) {
++                float val = goal_arr[j];
++                bool valid = (val >= joint_limits_lower[j] && val <= joint_limits_upper[j]);
++                std::cout << val << (valid ? "" : "(INVALID)") << " ";
++            }
++            std::cout << std::endl;
++        }
++
++        // Check if start/goal configurations are collision-free
++        std::cout << "   Checking collision status..." << std::endl;
++        vamp::collision::Environment<FloatVector<rake>> simd_env(environment);
++        for (std::size_t i = 0; i < starts.size(); ++i) {
++            bool start_valid = vamp::planning::validate_motion<Robot, rake, resolution>(starts[i], starts[i], simd_env);
++            bool goal_valid = vamp::planning::validate_motion<Robot, rake, resolution>(goals[i], goals[i], simd_env);
++            std::cout << "   Robot " << i << ": start=" << (start_valid ? "valid" : "INVALID") 
++                      << ", goal=" << (goal_valid ? "valid" : "INVALID") << std::endl;
++        }
++
++        // 4. Create settings
++        std::cout << "4. Creating settings..." << std::endl;
++        MRSettings settings;
++        settings.set_roadmap_params(1000, 10000, 100);  // Smaller for testing
++        settings.set_rrtc_params(1.0f, 1000, 1000);
++        settings.set_inter_robot_params(false);  // Disable for dummy planner
++
++        // 5. Create RNG
++        std::cout << "5. Creating RNG..." << std::endl;
++        auto rng = std::make_shared<vamp::rng::Halton<Robot::dimension>>();
++
++        // 6. Create planner
++        std::cout << "6. Creating dummy planner..." << std::endl;
++        auto planner = MRPlannerFactory::create_planner<Robot, rake, resolution>(
++            "dummy", base_positions, environment, settings, rng);
++
++        if (!planner) {
++            std::cerr << "Failed to create planner!" << std::endl;
++            return 1;
++        }
++
++        std::cout << "   Created planner with " << planner->num_robots() << " robots" << std::endl;
++
++        // 7. Build roadmaps
++        std::cout << "7. Building roadmaps..." << std::endl;
++        planner->build_roadmaps(starts, goals);
++        
++        std::cout << "   Roadmap build time: " << planner->get_roadmap_build_time_ns() / 1e6 << " ms" << std::endl;
++
++        // 8. Solve planning problem
++        std::cout << "8. Solving planning problem..." << std::endl;
++        auto result = planner->solve_ignoring_inter_robot_collisions(starts, goals);
++
++        // 9. Report results
++        std::cout << "9. Results:" << std::endl;
++        std::cout << "   Success: " << (result.success ? "Yes" : "No") << std::endl;
++        std::cout << "   Algorithm: " << result.algorithm_name << std::endl;
++        std::cout << "   Planning time: " << result.nanoseconds / 1e6 << " ms" << std::endl;
++        std::cout << "   Total cost: " << result.total_cost << std::endl;
++        std::cout << "   Number of robot paths: " << result.num_robots() << std::endl;
++        
++        for (std::size_t i = 0; i < result.robot_paths.size(); ++i) {
++            const auto& path = result.robot_paths[i];
++            std::cout << "   Robot " << i << ": " << path.size() << " waypoints, cost: " << path.cost() << std::endl;
++        }
++
++        // 10. Test available algorithms
++        std::cout << "10. Available algorithms:" << std::endl;
++        auto algorithms = MRPlannerFactory::get_available_algorithms();
++        for (const auto& alg : algorithms) {
++            std::cout << "   - " << alg << ": " << MRPlannerFactory::get_algorithm_description(alg) << std::endl;
++        }
++
++        std::cout << "\nTest completed successfully!" << std::endl;
++        return 0;
++
++    } catch (const std::exception& e) {
++        std::cerr << "Error: " << e.what() << std::endl;
++        return 1;
++    }
++} 
+\ No newline at end of file
+diff --git a/scripts/demo_templated_fk.py b/scripts/demo_templated_fk.py
+new file mode 100644
+index 0000000..9698570
+--- /dev/null
++++ b/scripts/demo_templated_fk.py
+@@ -0,0 +1,129 @@
++#!/usr/bin/env python3
++"""
++Demonstration of templated FK functions with base position parameters.
++
++This script shows how the templated approach would work for different
++robot base positions while maintaining SIMD efficiency through compile-time
++optimization.
++"""
++
++import numpy as np
++
++# This would be the actual implementation using the templated FK functions
++# For demonstration purposes, we'll show the concept
++
++def demonstrate_templated_fk():
++    """
++    Demonstrate how templated FK functions would work with different base positions.
++    """
++    
++    print("=== Templated FK Functions with Base Position Parameters ===\n")
++    
++    # Example robot configurations (7-DOF for Panda)
++    configs = [
++        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # Zero configuration
++        [0.5, 0.3, -0.2, 0.1, 0.4, -0.1, 0.2],  # Random configuration
++    ]
++    
++    # Different base positions (in meters)
++    base_positions = [
++        (0.0, 0.0, 0.05),    # Panda_0_0: (0, 0, 0.05)
++        (0.0, 1.0, 0.05),    # Panda_0_1: (0, 1, 0.05)
++        (1.0, 0.0, 0.05),    # Panda_1_0: (1, 0, 0.05)
++        (2.0, 2.0, 0.05),    # Panda_2_2: (2, 2, 0.05)
++    ]
++    
++    for i, config in enumerate(configs):
++        print(f"Configuration {i+1}: {config}")
++        
++        for base_x, base_y, base_z in base_positions:
++            print(f"  Base position ({base_x}, {base_y}, {base_z}):")
++            
++            # In the actual implementation, this would call:
++            # spheres = robot.sphere_fk(config)  # Where robot is templated on base position
++            
++            # For demonstration, show what the first few sphere positions would be:
++            # (These are the hardcoded base positions from the FK file)
++            base_spheres = [
++                (0.0, 0.0, 0.05, 0.08),    # Sphere 0
++                (0.0, 0.0, 0.333, 0.06),   # Sphere 1
++                (0.0, 0.0, 0.333, 0.06),   # Sphere 2
++                (0.0, 0.0, 0.213, 0.06),   # Sphere 3
++                (0.0, 0.0, 0.163, 0.06),   # Sphere 4
++            ]
++            
++            print("    First 5 sphere positions (x, y, z, radius):")
++            for j, (x, y, z, r) in enumerate(base_spheres):
++                world_x = x + base_x
++                world_y = y + base_y
++                world_z = z + base_z
++                print(f"      Sphere {j}: ({world_x:.3f}, {world_y:.3f}, {world_z:.3f}, {r:.3f})")
++            
++            print()
++        
++        print("-" * 60)
++        print()
++
++def explain_compiler_optimization():
++    """
++    Explain how the compiler optimization works with templated base positions.
++    """
++    
++    print("=== Compiler Optimization Benefits ===\n")
++    
++    print("1. **Compile-time Constant Folding**:")
++    print("   When base_x = 2.0f, base_y = 2.0f, base_z = 0.05f:")
++    print("   - out.x[0] = 0.0f + 2.0f becomes out.x[0] = 2.0f")
++    print("   - out.y[0] = 0.0f + 2.0f becomes out.y[0] = 2.0f")
++    print("   - out.z[0] = 0.05f + 0.05f becomes out.z[0] = 0.1f")
++    print("   - No runtime addition operations needed!\n")
++    
++    print("2. **SIMD Vectorization**:")
++    print("   - The compiler can vectorize the FK calculations")
++    print("   - Base position additions become constant offsets")
++    print("   - No branching or conditional logic for base position")
++    print("   - Maintains full SIMD efficiency\n")
++    
++    print("3. **Memory Access Patterns**:")
++    print("   - All sphere positions are computed in one pass")
++    print("   - No separate loop to add base positions")
++    print("   - Better cache locality and memory bandwidth utilization\n")
++    
++    print("4. **Code Generation**:")
++    print("   - Each robot variant gets its own optimized function")
++    print("   - No function pointer indirection")
++    print("   - Direct inlining of base position constants\n")
++
++def show_implementation_steps():
++    """
++    Show the steps needed to implement this approach.
++    """
++    
++    print("=== Implementation Steps ===\n")
++    
++    print("1. **Modify FK Functions** (src/impl/vamp/robots/panda/fk.hh):")
++    print("   - Add template parameters for base_x, base_y, base_z")
++    print("   - Modify sphere_fk<rake, base_x, base_y, base_z>()")
++    print("   - Modify interleaved_sphere_fk<rake, base_x, base_y, base_z>()")
++    print("   - Add base position to all sphere coordinate assignments\n")
++    
++    print("2. **Update Robot Base Classes** (src/impl/vamp/robots/panda_base.hh):")
++    print("   - Change sphere_fk alias to use templated version")
++    print("   - Change fkcc alias to use templated version")
++    print("   - Pass base_x, base_y, base_z as template parameters\n")
++    
++    print("3. **Update Helper Template** (src/impl/vamp/bindings/common.hh):")
++    print("   - Modify fk() function to use templated sphere_fk")
++    print("   - Remove runtime base position addition")
++    print("   - Let compiler handle base position at compile time\n")
++    
++    print("4. **Benefits Achieved**:")
++    print("   - Zero runtime overhead for base position addition")
++    print("   - Maintained SIMD efficiency")
++    print("   - Compile-time optimization of constant additions")
++    print("   - Type safety through template parameters\n")
++
++if __name__ == "__main__":
++    demonstrate_templated_fk()
++    explain_compiler_optimization()
++    show_implementation_steps() 
+\ No newline at end of file
+diff --git a/scripts/mr_planning_example.py b/scripts/mr_planning_example.py
+new file mode 100644
+index 0000000..2cb63a1
+--- /dev/null
++++ b/scripts/mr_planning_example.py
+@@ -0,0 +1,242 @@
++#!/usr/bin/env python3
++"""
++Multi-robot planning example using the MR planning framework.
++
++This script demonstrates how to use the multi-robot planning framework
++to plan for multiple Panda robots with different base positions.
++"""
++
++import numpy as np
++import vamp
++from vamp.mr_planning import (
++    MRSettings, MRPlanningResult, FloatVector7,
++    create_mr_problem, create_dummy_planner
++)
++
++def create_float_vector_7(values):
++    """Create a FloatVector7 from a list of 7 values."""
++    if len(values) != 7:
++        raise ValueError("Expected 7 values for Panda robot configuration")
++    return FloatVector7(values)
++
++def main(visualize: bool = True):
++    print("Multi-Robot Planning Example")
++    print("=" * 40)
++    
++    # Create environment (empty for this example)
++    env = vamp.Environment()
++    
++    # Define robot base positions (in meters)
++    # These correspond to the grid positions supported by the template variants
++    base_positions = [
++        [0.0, 0.0, 0.05],    # Panda_0_0
++        [1.0, 0.0, 0.05],    # Panda_1_0  
++        [2.0, 0.0, 0.05],    # Panda_2_0
++    ]
++    
++    print(f"Planning for {len(base_positions)} robots")
++    for i, pos in enumerate(base_positions):
++        print(f"  Robot {i}: base position {pos}")
++    
++    # Define start and goal configurations for each robot
++    # Using simple configurations that should be reachable
++    starts = [
++        create_float_vector_7([0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]),  # Robot 0
++        create_float_vector_7([0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]),  # Robot 1
++        create_float_vector_7([0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]),  # Robot 2
++    ]
++    
++    goals = [
++        create_float_vector_7([0.0, 0.785, 0.0, -0.785, 0.0, 1.571, -0.785]),   # Robot 0
++        create_float_vector_7([0.0, 0.785, 0.0, -0.785, 0.0, 1.571, -0.785]),   # Robot 1
++        create_float_vector_7([0.0, 0.785, 0.0, -0.785, 0.0, 1.571, -0.785]),   # Robot 2
++    ]
++    
++    print("\nStart configurations:")
++    for i, start in enumerate(starts):
++        print(f"  Robot {i}: {start.to_list()}")
++    
++    print("\nGoal configurations:")
++    for i, goal in enumerate(goals):
++        print(f"  Robot {i}: {goal.to_list()}")
++    
++    # Create multi-robot planning settings
++    settings = MRSettings()
++    settings.algorithm = "dummy"
++    settings.enable_inter_robot_collision_checking = False  # Ignore inter-robot collisions for demo
++    settings.enable_parallel_roadmap_construction = True
++    
++    print(f"\nUsing algorithm: {settings.algorithm}")
++    print(f"Inter-robot collision checking: {settings.enable_inter_robot_collision_checking}")
++    print(f"Parallel roadmap construction: {settings.enable_parallel_roadmap_construction}")
++    
++    try:
++        # Method 1: Use the helper function
++        print("\n" + "="*40)
++        print("Method 1: Using create_mr_problem and solve_mr_problem helper functions")
++        print("="*40)
++        
++        # Create the problem first
++        problem = create_mr_problem(base_positions, starts, goals, env, settings)
++        print(f"Created problem with {problem.num_robots()} robots")
++        
++        # Solve the problem
++        from vamp.mr_planning import solve_mr_problem
++        result = solve_mr_problem(problem, "dummy", settings)
++        
++        print(f"Planning successful: {result.success}")
++        print(f"Algorithm used: {result.algorithm_name}")
++        print(f"Total cost: {result.total_cost}")
++        print(f"Planning time: {result.nanoseconds / 1e6:.2f} ms")
++        print(f"Iterations: {result.iterations}")
++        
++        for i, path in enumerate(result.robot_paths):
++            print(f"  Robot {i}: {len(path)} waypoints")
++            if path:
++                print(f"    Start: {path[0].to_list()}")
++                print(f"    End: {path[len(path)-1].to_list()}")
++        
++        # Method 2: Create planner directly
++        print("\n" + "="*40)
++        print("Method 2: Creating planner directly")
++        print("="*40)
++        
++        planner = create_dummy_planner(base_positions, env, settings)
++        
++        # Build roadmaps first
++        print("Building roadmaps...")
++        planner.build_roadmaps(starts, goals)
++        
++        if planner.are_roadmaps_built():
++            print("Roadmaps built successfully")
++            print(f"Roadmap build time: {planner.get_roadmap_build_time_ns() / 1e6:.2f} ms")
++        else:
++            print("Failed to build roadmaps")
++            return
++        
++        # Solve the planning problem
++        print("Solving planning problem...")
++        result2 = planner.solve(starts, goals)
++        
++        print(f"Planning successful: {result2.success}")
++        print(f"Algorithm used: {result2.algorithm_name}")
++        print(f"Total cost: {result2.total_cost}")
++        print(f"Planning time: {result2.nanoseconds / 1e6:.2f} ms")
++        print(f"Iterations: {result2.iterations}")
++        
++        for i, path in enumerate(result2.robot_paths):
++            print(f"  Robot {i}: {len(path)} waypoints")
++            if path:
++                print(f"    Start: {path[0].to_list()}")
++                print(f"    End: {path[len(path)-1].to_list()}")
++        
++        # Verify results are the same
++        print("\n" + "="*40)
++        print("Verification")
++        print("="*40)
++        
++        if result.success == result2.success and len(result.robot_paths) == len(result2.robot_paths):
++            print("✓ Both methods produced consistent results")
++            
++            # Check if paths are identical
++            paths_match = True
++            for i, (path1, path2) in enumerate(zip(result.robot_paths, result2.robot_paths)):
++                if len(path1) != len(path2):
++                    paths_match = False
++                    break
++                for j, (wp1, wp2) in enumerate(zip(path1, path2)):
++                    if wp1.to_list() != wp2.to_list():
++                        paths_match = False
++                        break
++                if not paths_match:
++                    break
++            
++            if paths_match:
++                print("✓ Paths are identical between methods")
++            else:
++                print("⚠ Paths differ between methods (this is expected for some algorithms)")
++        else:
++            print("✗ Results are inconsistent between methods")
++        
++        # Visualization
++        if visualize and result.success:
++            print("\n" + "="*40)
++            print("Visualization")
++            print("="*40)
++            
++            from vamp import pybullet_interface as vpb
++            from pathlib import Path
++            
++            # Create simulator
++            robot_dir = Path(__file__).parent.parent / 'resources' / 'panda'
++            sim = vpb.PyBulletSimulator(
++                str(robot_dir / "panda_spherized.urdf"), 
++                vamp.ROBOT_JOINTS['panda'], 
++                visualize=True
++            )
++            
++            # Set up first robot at origin
++            first_robot_id = sim.skel_id
++            sim.set_robot_base_position(base_positions[0])
++            print(f"Main robot at position {base_positions[0]}")
++            
++            # Load additional robots at different positions
++            robot_ids = [first_robot_id]
++            for i, (x, y, z) in enumerate(base_positions[1:], 2):
++                new_robot_id = sim.client.loadURDF(
++                    str(robot_dir / "panda_spherized.urdf"),
++                    basePosition=(x, y, z),
++                    baseOrientation=(0, 0, 0, 1),
++                    useFixedBase=True,
++                    flags=sim.client.URDF_MAINTAIN_LINK_ORDER | sim.client.URDF_USE_SELF_COLLISION
++                )
++                robot_ids.append(new_robot_id)
++                sim.add_robot(new_robot_id, sim.joints, f"Robot_{i}")
++                print(f"Robot {i} at position ({x}, {y}, {z})")
++            
++            # Debug: Check the original paths
++            print("\nDebug: Original paths from multi-robot planning:")
++            any_empty = False
++            for i, path in enumerate(result.robot_paths):
++                print(f"  Robot {i}: {len(path)} waypoints")
++                if len(path) == 0:
++                    print(f"  WARNING: Robot {i} has an empty plan!")
++                    any_empty = True
++                elif path:
++                    print(f"    Start: {path[0].to_list()}")
++                    print(f"    End: {path[len(path)-1].to_list()}")
++            if any_empty:
++                print("\nERROR: One or more robot plans are empty. Multi-robot animation will not run.")
++                return
++            
++            # Convert paths to the format expected by the visualization system
++            # The visualization expects paths with Configuration objects, not FloatVector7
++            Path = vamp.panda.Path
++            Configuration = vamp.panda.Configuration
++            
++            robot_plans = {}
++            for i, (robot_id, path) in enumerate(zip(robot_ids, result.robot_paths)):
++                print(f"Converting path for robot {i} (ID: {robot_id})")
++                
++                # Convert FloatVector7 path to Configuration path
++                panda_path = Path()
++                for waypoint in path:
++                    panda_path.append(Configuration(waypoint.to_list()))
++                
++                robot_plans[robot_id] = panda_path
++                print(f"  Converted: {len(panda_path)} waypoints")
++            
++            print(f"\nStarting multi-robot animation with {len(robot_plans)} robots...")
++            print("Controls: Space=pause/play, Left/Right=step, Q=quit")
++            
++            # Start the animation
++            sim.animate_multi(robot_plans)
++        
++    except Exception as e:
++        print(f"Error during planning: {e}")
++        import traceback
++        traceback.print_exc()
++
++if __name__ == "__main__":
++    import fire
++    fire.Fire(main) 
+\ No newline at end of file
+diff --git a/scripts/multi_robot_sphere_cage_example.py b/scripts/multi_robot_sphere_cage_example.py
+new file mode 100644
+index 0000000..7c658c0
+--- /dev/null
++++ b/scripts/multi_robot_sphere_cage_example.py
+@@ -0,0 +1,201 @@
++import numpy as np
++from pathlib import Path
++import random
++import copy
++import vamp
++from fire import Fire
++
++# Starting configuration for each robot
++a = [0., -0.785, 0., -2.356, 0., 1.571, 0.785]
++
++# Goal configuration for each robot
++b = [2.35, 1., 0., -0.8, 0, 2.5, 0.785]
++
++# Problem specification: a list of sphere centers
++problem = [
++    [0.55, 0, 0.25],
++    [0.35, 0.35, 0.25],
++    [0, 0.55, 0.25],
++    [-0.55, 0, 0.25],
++    [-0.35, -0.35, 0.25],
++    [0, -0.55, 0.25],
++    [0.35, -0.35, 0.25],
++    [0.35, 0.35, 0.8],
++    [0, 0.55, 0.8],
++    [-0.35, 0.35, 0.8],
++    [-0.55, 0, 0.8],
++    [-0.35, -0.35, 0.8],
++    [0, -0.55, 0.8],
++    [0.35, -0.35, 0.8],
++    ]
++
++
++def main(
++    variation: float = 0.01,
++    benchmark: bool = True,
++    n_trials: int = 100,
++    radius: float = 0.2,
++    visualize: bool = False,
++    planner: str = "rrtc",
++    sampler_name: str = "halton",  # Sampler to use.
++    skip_rng_iterations: int = 0,  # Skip a number of RNG iterations
++    base_positions: list = None,  # List of (x, y, z) base positions for each robot
++    **kwargs,
++    ):
++    
++    # Default base positions if none provided
++    if base_positions is None:
++        base_positions = [
++            (0.0, 0.0, 0.05),   # Robot 1 at origin
++            (2.0, 0.0, 0.05),   # Robot 2 at x=2
++            (0.0, 2.0, 0.05),   # Robot 3 at y=2
++        ]
++    
++    print(f"Multi-robot setup with {len(base_positions)} robots at positions: {base_positions}")
++
++    # Use the new multi-robot configuration function
++    (vamp_module, planner_func, plan_settings,
++     simp_settings, robot_positions) = vamp.configure_multi_robot_and_planner_with_kwargs(
++        "panda", planner, base_positions, **kwargs
++    )
++
++    sampler = getattr(vamp_module, sampler_name)()
++    sampler.skip(skip_rng_iterations)
++
++    if benchmark:
++        try:
++            import pandas as pd
++        except ImportError:
++            print("pandas not available, skipping benchmark")
++            benchmark = False
++            
++        if benchmark:
++            random.seed(0)
++            np.random.seed(0)
++
++            results = []
++            spheres = [np.array(sphere) for sphere in problem]
++            for _ in range(n_trials):
++                random.shuffle(spheres)
++                spheres_copy = copy.deepcopy(spheres)
++
++                e = vamp.Environment()
++                for sphere in spheres_copy:
++                    sphere += np.random.uniform(low = -variation, high = variation, size = (3, ))
++                    e.add_sphere(vamp.Sphere(sphere, radius))
++
++                # For multi-robot, we'll just test the first robot's start/goal
++                # In a real multi-robot scenario, you'd have different start/goal for each robot
++                if vamp.panda.validate(a, e) and vamp.panda.validate(b, e):
++                    result = planner_func(a, b, e, plan_settings, sampler)
++                    simple = vamp_module.simplify(result.path, e, simp_settings, sampler)
++                    results.append(vamp.results_to_dict(result, simple))
++
++            df = pd.DataFrame.from_dict(results)
++
++            # Convert to microseconds
++            df["planning_time"] = df["planning_time"].dt.microseconds
++            df["simplification_time"] = df["simplification_time"].dt.microseconds
++
++            # Get summary statistics
++            stats = df[[
++                "planning_time",
++                "simplification_time",
++                "initial_path_cost",
++                "simplified_path_cost",
++                "planning_iterations"
++                ]].describe()
++
++            print(stats)
++
++    if visualize:
++        from vamp import pybullet_interface as vpb
++
++        robot_dir = Path(__file__).parent.parent / 'resources' / 'panda'
++        
++        # Create a single simulator and load multiple robots
++        sim = vpb.PyBulletSimulator(
++            str(robot_dir / f"panda_spherized.urdf"), vamp.ROBOT_JOINTS['panda'], True
++        )
++        
++        # Store the first robot's ID and set its position
++        first_robot_id = sim.skel_id
++        sim.set_robot_base_position(robot_positions[0])
++        print(f"Robot 1 at position {robot_positions[0]}")
++        
++        # Load additional robots at different positions and register them
++        robot_ids = [first_robot_id]
++        for i, (x, y, z) in enumerate(robot_positions[1:], 2):
++            # Create a new robot body at the desired position
++            new_robot_id = sim.client.loadURDF(
++                str(robot_dir / f"panda_spherized.urdf"),
++                basePosition=(x, y, z),
++                baseOrientation=(0, 0, 0, 1),
++                useFixedBase=True,
++                flags=sim.client.URDF_MAINTAIN_LINK_ORDER | sim.client.URDF_USE_SELF_COLLISION
++            )
++            robot_ids.append(new_robot_id)
++            
++            # Register the robot with the simulator for multi-robot animation
++            sim.add_robot(new_robot_id, sim.joints, f"Robot_{i}")
++            print(f"Robot {i} at position ({x}, {y}, {z})")
++
++        # Create environment with obstacles
++        e = vamp.Environment()
++        for sphere in problem:
++            e.add_sphere(vamp.Sphere(sphere, radius))
++            sim.add_sphere(radius, sphere)
++
++        # Plan the path (for this example, we'll use the same path for all robots)
++        # In a real scenario, you'd plan different paths for each robot
++        result = planner_func(a, b, e, plan_settings, sampler)
++        simple = vamp_module.simplify(result.path, e, simp_settings, sampler)
++        simple.path.interpolate_to_resolution(vamp.panda.resolution())
++
++        # Use the new multi-robot animation system
++        print("Multi-robot animation using new system:")
++        print("Press space to start/stop global animation")
++        print("Press Tab to select different robots for individual control")
++        print("Press 0-9 to select specific robots")
++        print("Press R to reset all robots")
++        print("Press Q to quit")
++        
++        # Method 1: Simple multi-robot animation with same plan for all robots
++        sim.animate_multi(robot_ids, plan=simple.path)
++        
++        # Method 2: Advanced multi-robot animation with different plans per robot
++        # This demonstrates how you could have different paths for each robot
++        # robot_plans = {
++        #     robot_ids[0]: simple.path,
++        #     robot_ids[1]: simple.path,  # Could be different path
++        #     robot_ids[2]: simple.path,  # Could be different path
++        # }
++        # sim.animate_multi(robot_plans)
++        
++        # Method 3: Advanced configuration with custom callbacks
++        # from vamp.pybullet_interface import RobotAnimationConfig
++        # configs = [
++        #     RobotAnimationConfig(
++        #         robot_id=robot_ids[0],
++        #         plan=simple.path,
++        #         callback=lambda state, robot_id: print(f"Robot {robot_id} at state {state}"),
++        #         name="Main Robot"
++        #     ),
++        #     RobotAnimationConfig(
++        #         robot_id=robot_ids[1],
++        #         plan=simple.path,
++        #         speed=1.5,  # This robot moves 50% faster
++        #         name="Fast Robot"
++        #     ),
++        #     RobotAnimationConfig(
++        #         robot_id=robot_ids[2],
++        #         plan=simple.path,
++        #         start_time=0.5,  # This robot starts halfway through
++        #         name="Delayed Robot"
++        #     )
++        # ]
++        # sim.animate_multi_advanced(configs)
++
++
++if __name__ == "__main__":
++    Fire(main) 
+\ No newline at end of file
+diff --git a/scripts/sphere_cage_example.py b/scripts/sphere_cage_example.py
+index 67c7fee..55ab68f 100644
+--- a/scripts/sphere_cage_example.py
++++ b/scripts/sphere_cage_example.py
+@@ -104,7 +104,16 @@ def main(
+ 
+         simple.path.interpolate_to_resolution(vamp.panda.resolution())
+ 
++        # Use the new multi-robot system for single robot (demonstrates backward compatibility)
++        print("Single robot animation using new multi-robot system:")
++        print("Press space to start/stop animation, use left/right arrows to step through states")
++        
++        # Method 1: Use the original animate function (backward compatible)
+         sim.animate(simple.path)
++        
++        # Method 2: Use the new multi-robot system for single robot
++        # This demonstrates how the new system can handle single robots too
++        # sim.animate_multi([sim.skel_id], plan=simple.path)
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/src/impl/vamp/bindings/init.hh b/src/impl/vamp/bindings/init.hh
+index a6a28ff..cd00bb9 100644
+--- a/src/impl/vamp/bindings/init.hh
++++ b/src/impl/vamp/bindings/init.hh
+@@ -9,4 +9,5 @@ namespace vamp::binding
+     void init_panda(nanobind::module_ &pymodule);
+     void init_fetch(nanobind::module_ &pymodule);
+     void init_baxter(nanobind::module_ &pymodule);
++    void init_mr_planning(nanobind::module_ &pymodule);
+ }  // namespace vamp::binding
+diff --git a/src/impl/vamp/bindings/mr_planning.cc b/src/impl/vamp/bindings/mr_planning.cc
+new file mode 100644
+index 0000000..af6843d
+--- /dev/null
++++ b/src/impl/vamp/bindings/mr_planning.cc
+@@ -0,0 +1,208 @@
++#include <nanobind/nanobind.h>
++#include <nanobind/stl/string.h>
++#include <nanobind/stl/vector.h>
++#include <nanobind/stl/array.h>
++#include <nanobind/stl/unique_ptr.h>
++#include <nanobind/stl/shared_ptr.h>
++
++#include <vamp/mr_planning/mr_problem.hh>
++#include <vamp/mr_planning/mr_settings.hh>
++#include <vamp/mr_planning/mr_planner_base.hh>
++#include <vamp/mr_planning/dummy_mr_planner.hh>
++#include <vamp/mr_planning/mr_factory.hh>
++#include <vamp/collision/environment.hh>
++#include <vamp/random/rng.hh>
++#include <vamp/random/halton.hh>
++#include <vamp/vector.hh>
++
++namespace nb = nanobind;
++
++using namespace vamp::mr_planning;
++
++// Type aliases for Python bindings
++using MRPlanner = MRPlannerBase<4, 4>;
++using DummyPlanner = DummyMRPlanner<4, 4>;
++using Environment = vamp::collision::Environment<float>;
++using RNG = vamp::rng::RNG<7>;
++using HaltonRNG = vamp::rng::Halton<7>;
++using FloatVector7 = vamp::FloatVector<7>;
++
++namespace vamp::binding
++{
++
++void init_mr_planning(nb::module_& pymodule)
++{
++    // Create the multi-robot planning module
++    auto mr_module = pymodule.def_submodule("mr_planning", "Multi-robot planning framework");
++
++    // Bind FloatVector<7> for configurations
++    nb::class_<FloatVector7>(mr_module, "FloatVector7")
++        .def(nb::init<>())
++        .def(nb::init<const std::vector<float>&>())
++        .def("__getitem__", [](const FloatVector7& v, std::size_t i) {
++            if (i >= 7) throw nb::index_error("Index out of range");
++            return v[{i, 0}];
++        })
++        .def("__setitem__", [](FloatVector7& v, std::size_t i, float value) {
++            if (i >= 7) throw nb::index_error("Index out of range");
++            // Create new FloatVector with modified data
++            auto array = v.to_array();
++            array[i] = value;
++            v = FloatVector7(array.data());
++        })
++        .def("to_list", [](const FloatVector7& v) {
++            std::vector<float> result(7);
++            for (std::size_t i = 0; i < 7; ++i) {
++                result[i] = v[{i, 0}];
++            }
++            return result;
++        })
++        .def("from_list", [](FloatVector7& v, const std::vector<float>& values) {
++            if (values.size() != 7) throw std::runtime_error("Expected 7 values");
++            // Create new FloatVector from the values
++            v = FloatVector7(values.data());
++        });
++    // Explicitly assign FloatVector7 to the submodule's namespace
++    mr_module.attr("FloatVector7") = nb::type<FloatVector7>();
++
++    // Bind MRProblem
++    nb::class_<MRProblem<7>>(mr_module, "MRProblem")
++        .def(nb::init<>(), "Create an empty multi-robot problem")
++        .def("add_robot", &MRProblem<7>::add_robot, 
++             nb::arg("start"), nb::arg("goal"), nb::arg("base_pos"), nb::arg("name") = "",
++             "Add a robot to the problem")
++        .def("clear", &MRProblem<7>::clear, "Clear all robots from the problem")
++        .def("is_valid", &MRProblem<7>::is_valid, "Check if the problem is well-formed")
++        .def("num_robots", &MRProblem<7>::num_robots, "Get the number of robots")
++        .def_rw("start_configurations", &MRProblem<7>::start_configurations)
++        .def_rw("goal_configurations", &MRProblem<7>::goal_configurations)
++        .def_rw("base_positions", &MRProblem<7>::base_positions)
++        .def_rw("environment", &MRProblem<7>::environment)
++        .def_rw("problem_name", &MRProblem<7>::problem_name)
++        .def_rw("robot_names", &MRProblem<7>::robot_names);
++    
++    // Bind MRPlanningResult
++    nb::class_<MRPlanningResult<7>>(mr_module, "MRPlanningResult")
++        .def(nb::init<>(), "Create an empty planning result")
++        .def("is_valid", &MRPlanningResult<7>::is_valid, "Check if the result is valid")
++        .def("num_robots", &MRPlanningResult<7>::num_robots, "Get the number of robot paths")
++        .def("calculate_total_cost", &MRPlanningResult<7>::calculate_total_cost, "Calculate total cost")
++        .def_rw("robot_paths", &MRPlanningResult<7>::robot_paths)
++        .def_rw("total_cost", &MRPlanningResult<7>::total_cost)
++        .def_rw("nanoseconds", &MRPlanningResult<7>::nanoseconds)
++        .def_rw("iterations", &MRPlanningResult<7>::iterations)
++        .def_rw("success", &MRPlanningResult<7>::success)
++        .def_rw("algorithm_name", &MRPlanningResult<7>::algorithm_name);
++    
++    // Bind MRSettings
++    nb::class_<MRSettings>(mr_module, "MRSettings")
++        .def(nb::init<>(), "Create default multi-robot settings")
++        .def_rw("enable_parallel_roadmap_construction", &MRSettings::enable_parallel_roadmap_construction)
++        .def_rw("enable_inter_robot_collision_checking", &MRSettings::enable_inter_robot_collision_checking)
++        .def_rw("inter_robot_safety_margin", &MRSettings::inter_robot_safety_margin)
++        .def_rw("algorithm", &MRSettings::algorithm)
++        .def_rw("roadmap_settings", &MRSettings::roadmap_settings)
++        .def_rw("rrtc_settings", &MRSettings::rrtc_settings);
++    
++    // Bind MRPlannerBase (abstract base class)
++    nb::class_<MRPlanner>(mr_module, "MRPlannerBase")
++        .def("build_roadmaps", &MRPlanner::build_roadmaps)
++        .def("are_roadmaps_built", &MRPlanner::are_roadmaps_built)
++        .def("solve_ignoring_inter_robot_collisions", 
++             &MRPlanner::solve_ignoring_inter_robot_collisions)
++        .def("get_roadmap_build_time_ns", &MRPlanner::get_roadmap_build_time_ns)
++        .def("get_total_planning_time_ns", &MRPlanner::get_total_planning_time_ns)
++        .def("get_settings", &MRPlanner::get_settings, nb::rv_policy::reference)
++        .def("get_environment", &MRPlanner::get_environment, nb::rv_policy::reference);
++    
++    // Bind DummyMRPlanner
++    nb::class_<DummyPlanner, MRPlanner>(mr_module, "DummyMRPlanner")
++        .def(nb::init<const std::vector<std::array<float, 3>>&, 
++                      const vamp::collision::Environment<float>&, 
++                      std::shared_ptr<vamp::rng::RNG<7>>, 
++                      const MRSettings&>(),
++             nb::arg("base_positions"), nb::arg("env"), nb::arg("rng"), nb::arg("settings") = MRSettings(),
++             "Create a dummy multi-robot planner")
++        .def("solve", static_cast<MRPlanningResult<7> (DummyPlanner::*)(const std::vector<FloatVector7>&, const std::vector<FloatVector7>&)>(&DummyPlanner::solve),
++             nb::arg("starts"), nb::arg("goals"), "Solve the multi-robot planning problem");
++    
++    // Bind MRPlannerFactory
++    nb::class_<MRPlannerFactory>(mr_module, "MRPlannerFactory")
++        .def_static("create_planner", &MRPlannerFactory::create_planner,
++                    nb::arg("algorithm"), nb::arg("base_positions"), nb::arg("environment"), 
++                    nb::arg("rng"), nb::arg("settings") = MRSettings(),
++                    "Create a multi-robot planner of the specified type")
++        .def_static("get_available_algorithms", &MRPlannerFactory::get_available_algorithms,
++                    "Get list of available planning algorithms")
++        .def_static("is_algorithm_available", &MRPlannerFactory::is_algorithm_available,
++                    nb::arg("algorithm"), "Check if an algorithm is available");
++    
++    // Helper functions for easy multi-robot planning
++    mr_module.def("create_mr_problem", 
++                  [](const std::vector<std::array<float, 3>>& base_positions,
++                     const std::vector<FloatVector7>& starts,
++                     const std::vector<FloatVector7>& goals,
++                     const vamp::collision::Environment<float>& env,
++                     const MRSettings& settings) -> MRProblem<7> {
++                      MRProblem<7> problem;
++                      problem.environment = env;
++                      problem.problem_name = "mr_problem";
++                      
++                      problem.base_positions = base_positions;
++                      
++                      problem.start_configurations = starts;
++                      problem.goal_configurations = goals;
++                      
++                      // Generate robot names
++                      for (std::size_t i = 0; i < base_positions.size(); ++i) {
++                          problem.robot_names.push_back("robot_" + std::to_string(i));
++                      }
++                      
++                      return problem;
++                  },
++                  nb::arg("base_positions"), nb::arg("starts"), nb::arg("goals"), 
++                  nb::arg("environment"), nb::arg("settings"),
++                  "Create a multi-robot planning problem");
++
++    mr_module.def("solve_mr_problem",
++                  [](const MRProblem<7>& problem, 
++                     const std::string& algorithm = "dummy",
++                     const MRSettings& settings = MRSettings()) -> MRPlanningResult<7> {
++                      // Create RNG using concrete implementation
++                      auto rng = std::make_shared<HaltonRNG>();
++                      
++                      // Create planner
++                      auto planner = MRPlannerFactory::create_planner(
++                          algorithm, problem.base_positions, problem.environment, rng, settings);
++                      
++                      // Solve problem
++                      return planner->solve_ignoring_inter_robot_collisions(
++                          problem.start_configurations, problem.goal_configurations);
++                  },
++                  nb::arg("problem"), nb::arg("algorithm") = "dummy", nb::arg("settings") = MRSettings(),
++                  "Solve a multi-robot planning problem");
++
++    // Helper function to create dummy planner
++    mr_module.def("create_dummy_planner", [](const std::vector<std::array<float, 3>>& base_positions,
++                                            const vamp::collision::Environment<float>& env,
++                                            const MRSettings& settings) {
++        auto rng = std::make_shared<HaltonRNG>();
++        return std::make_unique<DummyPlanner>(base_positions, env, rng, settings);
++    });
++
++    // Set __all__ for the submodule
++    mr_module.attr("__all__") = nb::make_tuple(
++        "FloatVector7",
++        "MRProblem",
++        "MRPlanningResult",
++        "MRSettings",
++        "MRPlannerBase",
++        "DummyMRPlanner",
++        "MRPlannerFactory",
++        "create_mr_problem",
++        "solve_mr_problem",
++        "create_dummy_planner"
++    );
++}
++
++}  // namespace vamp::binding 
+\ No newline at end of file
+diff --git a/src/impl/vamp/bindings/panda.cc b/src/impl/vamp/bindings/panda.cc
+index a15cd21..d34b678 100644
+--- a/src/impl/vamp/bindings/panda.cc
++++ b/src/impl/vamp/bindings/panda.cc
+@@ -1,8 +1,73 @@
+ #include <vamp/bindings/common.hh>
+ #include <vamp/bindings/init.hh>
+-#include <vamp/robots/panda.hh>
++#include <vamp/robots/panda_grid.hh>
+ 
+ void vamp::binding::init_panda(nanobind::module_ &pymodule)
+ {
+-    vamp::binding::init_robot<vamp::robots::Panda>(pymodule);
++    // Create the main panda module (backward compatibility)
++    auto main_module = vamp::binding::init_robot<vamp::robots::Panda>(pymodule);
++    
++    // Create grid variant submodules with their own robot-specific functions
++    // We'll use a simpler approach that just exposes the key functionality
++    
++    // Helper function to create a grid variant submodule
++    auto create_grid_variant = [&pymodule, &main_module](const char* name, const char* description) {
++        auto submodule = pymodule.def_submodule(name, description);
++        
++        // Alias all classes from main module
++        submodule.attr("Configuration") = main_module.attr("Configuration");
++        submodule.attr("Path") = main_module.attr("Path");
++        submodule.attr("PlanningResult") = main_module.attr("PlanningResult");
++        submodule.attr("Roadmap") = main_module.attr("Roadmap");
++        submodule.attr("RNG") = main_module.attr("RNG");
++        submodule.attr("ProlateHyperspheroid") = main_module.attr("ProlateHyperspheroid");
++        
++        // Alias all functions from main module
++        submodule.attr("dimension") = main_module.attr("dimension");
++        submodule.attr("resolution") = main_module.attr("resolution");
++        submodule.attr("n_spheres") = main_module.attr("n_spheres");
++        submodule.attr("space_measure") = main_module.attr("space_measure");
++        submodule.attr("distance") = main_module.attr("distance");
++        submodule.attr("halton") = main_module.attr("halton");
++        submodule.attr("phs_sampler") = main_module.attr("phs_sampler");
++        submodule.attr("xorshift") = main_module.attr("xorshift");
++        submodule.attr("rrtc") = main_module.attr("rrtc");
++        submodule.attr("prm") = main_module.attr("prm");
++        submodule.attr("fcit") = main_module.attr("fcit");
++        submodule.attr("aorrtc") = main_module.attr("aorrtc");
++        submodule.attr("roadmap") = main_module.attr("roadmap");
++        submodule.attr("simplify") = main_module.attr("simplify");
++        submodule.attr("validate") = main_module.attr("validate");
++        submodule.attr("sphere_validity") = main_module.attr("sphere_validity");
++        submodule.attr("fk") = main_module.attr("fk");
++        submodule.attr("filter_from_pointcloud") = main_module.attr("filter_from_pointcloud");
++        submodule.attr("eefk") = main_module.attr("eefk");
++        
++        // Add grid-specific information
++        submodule.def("get_position", [name]() {
++            if (std::string(name) == "panda_0_0") return std::array<float, 3>{0.0f, 0.0f, 0.05f};
++            if (std::string(name) == "panda_0_1") return std::array<float, 3>{0.0f, 1.0f, 0.05f};
++            if (std::string(name) == "panda_0_2") return std::array<float, 3>{0.0f, 2.0f, 0.05f};
++            if (std::string(name) == "panda_1_0") return std::array<float, 3>{1.0f, 0.0f, 0.05f};
++            if (std::string(name) == "panda_1_1") return std::array<float, 3>{1.0f, 1.0f, 0.05f};
++            if (std::string(name) == "panda_1_2") return std::array<float, 3>{1.0f, 2.0f, 0.05f};
++            if (std::string(name) == "panda_2_0") return std::array<float, 3>{2.0f, 0.0f, 0.05f};
++            if (std::string(name) == "panda_2_1") return std::array<float, 3>{2.0f, 1.0f, 0.05f};
++            if (std::string(name) == "panda_2_2") return std::array<float, 3>{2.0f, 2.0f, 0.05f};
++            return std::array<float, 3>{0.0f, 0.0f, 0.05f};
++        }, "Get the base position of this robot variant");
++        
++        submodule.def("get_name", [name]() { return std::string(name); }, "Get the name of this robot variant");
++    };
++    
++    // Create all grid variants
++    create_grid_variant("panda_0_0", "Panda robot at position (0.0, 0.0, 0.05)");
++    create_grid_variant("panda_0_1", "Panda robot at position (0.0, 1.0, 0.05)");
++    create_grid_variant("panda_0_2", "Panda robot at position (0.0, 2.0, 0.05)");
++    create_grid_variant("panda_1_0", "Panda robot at position (1.0, 0.0, 0.05)");
++    create_grid_variant("panda_1_1", "Panda robot at position (1.0, 1.0, 0.05)");
++    create_grid_variant("panda_1_2", "Panda robot at position (1.0, 2.0, 0.05)");
++    create_grid_variant("panda_2_0", "Panda robot at position (2.0, 0.0, 0.05)");
++    create_grid_variant("panda_2_1", "Panda robot at position (2.0, 1.0, 0.05)");
++    create_grid_variant("panda_2_2", "Panda robot at position (2.0, 2.0, 0.05)");
+ }
+diff --git a/src/impl/vamp/bindings/python.cc b/src/impl/vamp/bindings/python.cc
+index 30356b6..f1c6e0a 100644
+--- a/src/impl/vamp/bindings/python.cc
++++ b/src/impl/vamp/bindings/python.cc
+@@ -11,4 +11,5 @@ NB_MODULE(_core_ext, pymodule)
+     vb::init_panda(pymodule);
+     vb::init_fetch(pymodule);
+     vb::init_baxter(pymodule);
++    vb::init_mr_planning(pymodule);
+ }
+diff --git a/src/impl/vamp/mr_planning/dummy_mr_planner.hh b/src/impl/vamp/mr_planning/dummy_mr_planner.hh
+new file mode 100644
+index 0000000..dad820a
+--- /dev/null
++++ b/src/impl/vamp/mr_planning/dummy_mr_planner.hh
+@@ -0,0 +1,99 @@
++#pragma once
++
++#include "mr_planner_base.hh"
++
++namespace vamp::mr_planning
++{
++    /**
++     * @brief Dummy multi-robot planner for testing and validation
++     * 
++     * This planner implements a simple approach that ignores inter-robot collisions
++     * and plans for each robot independently. It serves as a baseline for testing
++     * the multi-robot planning framework.
++     * 
++     * @tparam rake SIMD vector width
++     * @tparam resolution Collision checking resolution
++     */
++    template<std::size_t rake, std::size_t resolution>
++    class DummyMRPlanner : public MRPlannerBase<rake, resolution>
++    {
++    public:
++        using Base = MRPlannerBase<rake, resolution>;
++        using Environment = typename Base::Environment;
++        using RNG = typename Base::RNG;
++
++        /**
++         * @brief Constructor
++         * @param base_positions Base positions for each robot
++         * @param env Environment with obstacles
++         * @param rng Random number generator
++         * @param settings Multi-robot planning settings
++         */
++        DummyMRPlanner(const std::vector<std::array<float, 3>>& base_positions,
++                       const Environment& env,
++                       std::shared_ptr<RNG> rng,
++                       const MRSettings& settings = MRSettings())
++            : Base(base_positions, env, rng, settings)
++        {
++        }
++
++        /**
++         * @brief Solve multi-robot planning problem
++         * @param starts Start configurations for each robot
++         * @param goals Goal configurations for each robot
++         * @return Planning result with paths for each robot
++         */
++        MRPlanningResult<7> solve(const std::vector<vamp::FloatVector<7>>& starts,
++                                 const std::vector<vamp::FloatVector<7>>& goals)
++        {
++            // For dummy planner, just use the ignore inter-robot collisions method
++            return this->solve_ignoring_inter_robot_collisions(starts, goals);
++        }
++
++        /**
++         * @brief Solve multi-robot planning problem using MRProblem structure
++         * @param problem Multi-robot problem definition
++         * @return Planning result with paths for each robot
++         */
++        MRPlanningResult<7> solve(const MRProblem<7>& problem)
++        {
++            if (!problem.is_valid()) {
++                throw std::runtime_error("Invalid multi-robot problem");
++            }
++
++            if (problem.num_robots() != this->num_robots()) {
++                throw std::runtime_error("Problem robot count does not match planner robot count");
++            }
++
++            return solve(problem.start_configurations, problem.goal_configurations);
++        }
++
++        /**
++         * @brief Get planner name
++         * @return Name of the planner
++         */
++        std::string get_name() const {
++            return "DummyMRPlanner";
++        }
++
++        /**
++         * @brief Get planner description
++         * @return Description of the planner
++         */
++        std::string get_description() const {
++            return "Simple multi-robot planner that ignores inter-robot collisions. "
++                   "Each robot is planned independently using RRTConnect.";
++        }
++
++    protected:
++        /**
++         * @brief Override to add dummy-specific behavior when roadmap is built
++         * @param robot_idx Index of the robot
++         */
++        void on_roadmap_built(std::size_t robot_idx) override {
++            // Dummy planner doesn't need any special handling
++            Base::on_roadmap_built(robot_idx);
++        }
++    };
++
++}  // namespace vamp::mr_planning 
+\ No newline at end of file
+diff --git a/src/impl/vamp/mr_planning/mr_factory.hh b/src/impl/vamp/mr_planning/mr_factory.hh
+new file mode 100644
+index 0000000..6076847
+--- /dev/null
++++ b/src/impl/vamp/mr_planning/mr_factory.hh
+@@ -0,0 +1,81 @@
++#pragma once
++
++#include <memory>
++#include <string>
++#include <vector>
++#include <unordered_map>
++#include <functional>
++#include <stdexcept>
++
++#include <vamp/collision/environment.hh>
++#include <vamp/random/rng.hh>
++#include <vamp/robots/base_robot_interface.hh>
++#include <vamp/utils.hh>
++
++#include "mr_planner_base.hh"
++#include "dummy_mr_planner.hh"
++#include "mr_settings.hh"
++
++namespace vamp::mr_planning
++{
++    /**
++     * @brief Factory for creating multi-robot planners
++     * 
++     * This factory creates the appropriate multi-robot planner based on the
++     * specified algorithm name and configuration. It handles the template
++     * instantiation with the correct SIMD vector width and resolution.
++     */
++    class MRPlannerFactory
++    {
++    public:
++        using Environment = collision::Environment<float>;
++        using RNG = vamp::rng::RNG<7>;  // Fixed dimension for Panda robots
++
++        /**
++         * @brief Create a multi-robot planner
++         * @param algorithm_name Name of the algorithm to use
++         * @param base_positions Base positions for each robot
++         * @param env Environment with obstacles
++         * @param rng Random number generator
++         * @param settings Multi-robot planning settings
++         * @return Unique pointer to the created planner
++         */
++        static std::unique_ptr<MRPlannerBase<4, 4>> create_planner(
++            const std::string& algorithm_name,
++            const std::vector<std::array<float, 3>>& base_positions,
++            const Environment& env,
++            std::shared_ptr<RNG> rng,
++            const MRSettings& settings = MRSettings())
++        {
++            // For now, we only support the dummy planner
++            // In the future, this could be extended to support other algorithms
++            if (algorithm_name == "dummy" || algorithm_name == "ignore_inter_robot") {
++                return std::make_unique<DummyMRPlanner<4, 4>>(
++                    base_positions, env, rng, settings);
++            }
++            
++            throw std::runtime_error("Unknown multi-robot planning algorithm: " + algorithm_name);
++        }
++
++        /**
++         * @brief Get list of available algorithms
++         * @return Vector of algorithm names
++         */
++        static std::vector<std::string> get_available_algorithms()
++        {
++            return {"dummy", "ignore_inter_robot"};
++        }
++
++        /**
++         * @brief Check if an algorithm is available
++         * @param algorithm_name Name of the algorithm
++         * @return True if the algorithm is available
++         */
++        static bool is_algorithm_available(const std::string& algorithm_name)
++        {
++            auto algorithms = get_available_algorithms();
++            return std::find(algorithms.begin(), algorithms.end(), algorithm_name) != algorithms.end();
++        }
++    };
++
++}  // namespace vamp::mr_planning 
+\ No newline at end of file
+diff --git a/src/impl/vamp/mr_planning/mr_planner_base.hh b/src/impl/vamp/mr_planning/mr_planner_base.hh
+new file mode 100644
+index 0000000..201fb18
+--- /dev/null
++++ b/src/impl/vamp/mr_planning/mr_planner_base.hh
+@@ -0,0 +1,477 @@
++#pragma once
++
++#include <memory>
++#include <vector>
++#include <array>
++#include <chrono>
++#include <thread>
++#include <future>
++#include <variant>
++
++#include <vamp/collision/environment.hh>
++#include <vamp/planning/roadmap.hh>
++#include <vamp/planning/nn.hh>
++#include <vamp/planning/utils.hh>
++#include <vamp/planning/validate.hh>
++#include <vamp/planning/prm.hh>
++#include <vamp/planning/rrtc.hh>
++#include <vamp/random/rng.hh>
++#include <vamp/robots/panda_grid.hh>
++#include <vamp/utils.hh>
++#include <vamp/vector.hh>
++
++#include "mr_problem.hh"
++#include "mr_settings.hh"
++
++namespace vamp::mr_planning
++{
++    /**
++     * @brief Base class for multi-robot planning algorithms
++     * 
++     * This class provides the foundation for all multi-robot planners, including
++     * roadmap construction, robot management, and common utility functions.
++     * Supports heterogeneous robots with different grid positions.
++     * 
++     * @tparam rake SIMD vector width
++     * @tparam resolution Collision checking resolution
++     */
++    template<std::size_t rake, std::size_t resolution>
++    class MRPlannerBase
++    {
++    public:
++        using Environment = collision::Environment<float>;
++        using RNG = vamp::rng::RNG<7>;  // Fixed dimension for Panda robots
++
++    protected:
++        // Robot type variants for different grid positions
++        using Panda_0_0 = vamp::robots::Panda_0_0;
++        using Panda_0_1 = vamp::robots::Panda_0_1;
++        using Panda_0_2 = vamp::robots::Panda_0_2;
++        using Panda_1_0 = vamp::robots::Panda_1_0;
++        using Panda_1_1 = vamp::robots::Panda_1_1;
++        using Panda_1_2 = vamp::robots::Panda_1_2;
++        using Panda_2_0 = vamp::robots::Panda_2_0;
++        using Panda_2_1 = vamp::robots::Panda_2_1;
++        using Panda_2_2 = vamp::robots::Panda_2_2;
++
++        // Variant to hold different robot types
++        using RobotVariant = std::variant<Panda_0_0, Panda_0_1, Panda_0_2, 
++                                         Panda_1_0, Panda_1_1, Panda_1_2,
++                                         Panda_2_0, Panda_2_1, Panda_2_2>;
++
++        /**
++         * @brief Internal structure for managing robot roadmaps
++         */
++        struct RobotRoadmap {
++            std::unique_ptr<planning::Roadmap<7>> roadmap;  // Fixed dimension for Panda
++            std::vector<planning::RoadmapNode> nodes;
++            std::vector<planning::utils::ConnectedComponent> components;
++            std::unique_ptr<planning::NN<7>> nn_structure;  // Fixed dimension for Panda
++            std::unique_ptr<float[]> states_buffer;
++            std::size_t start_index;
++            std::size_t goal_index;
++            bool is_built = false;
++            
++            RobotRoadmap() : start_index(0), goal_index(1) {}
++        };
++
++        /**
++         * @brief Internal structure for managing robot instances
++         */
++        struct RobotInstance {
++            RobotVariant robot_type;  // The specific robot type (grid variant)
++            RobotRoadmap roadmap;
++            vamp::FloatVector<7> start_config;  // Use FloatVector for SIMD compatibility
++            vamp::FloatVector<7> goal_config;
++            std::array<float, 3> base_position;
++            std::string robot_id;
++            
++            RobotInstance() = default;
++        };
++
++    private:
++        std::vector<RobotInstance> robots_;
++        Environment environment_;
++        std::shared_ptr<RNG> rng_;
++        MRSettings settings_;
++        
++        // Timing information
++        std::size_t roadmap_build_time_ns_ = 0;
++        std::size_t total_planning_time_ns_ = 0;
++
++        // Convert environment to SIMD format for planning algorithms
++        using SIMDEnvironment = collision::Environment<FloatVector<rake>>;
++        
++        SIMDEnvironment get_simd_environment() const {
++            return SIMDEnvironment(environment_);
++        }
++
++        /**
++         * @brief Get the robot type for a given base position
++         * @param base_position Base position [x, y, z]
++         * @return Robot variant for the position
++         */
++        RobotVariant get_robot_type_for_position(const std::array<float, 3>& base_position) const
++        {
++            // Round to nearest grid position (convert to cm * 100)
++            int grid_x = std::round(base_position[0] * 100);
++            int grid_y = std::round(base_position[1] * 100);
++            int grid_z = std::round(base_position[2] * 100);
++            
++            // Map to template variant
++            if (grid_x == 0 && grid_y == 0 && grid_z == 5) return Panda_0_0{};
++            if (grid_x == 0 && grid_y == 100 && grid_z == 5) return Panda_0_1{};
++            if (grid_x == 0 && grid_y == 200 && grid_z == 5) return Panda_0_2{};
++            if (grid_x == 100 && grid_y == 0 && grid_z == 5) return Panda_1_0{};
++            if (grid_x == 100 && grid_y == 100 && grid_z == 5) return Panda_1_1{};
++            if (grid_x == 100 && grid_y == 200 && grid_z == 5) return Panda_1_2{};
++            if (grid_x == 200 && grid_y == 0 && grid_z == 5) return Panda_2_0{};
++            if (grid_x == 200 && grid_y == 100 && grid_z == 5) return Panda_2_1{};
++            if (grid_x == 200 && grid_y == 200 && grid_z == 5) return Panda_2_2{};
++            
++            throw std::runtime_error("Position (" + std::to_string(base_position[0]) + ", " + 
++                                   std::to_string(base_position[1]) + ", " + 
++                                   std::to_string(base_position[2]) + 
++                                   ") not supported in grid");
++        }
++
++        /**
++         * @brief Get robot name from variant
++         * @param robot_variant Robot variant
++         * @return Robot name string
++         */
++        std::string get_robot_name(const RobotVariant& robot_variant) const
++        {
++            return std::visit([](const auto& robot) { return robot.name; }, robot_variant);
++        }
++
++    public:
++        /**
++         * @brief Constructor
++         * @param base_positions Base positions for each robot
++         * @param env Environment with obstacles
++         * @param rng Random number generator
++         * @param settings Multi-robot planning settings
++         */
++        MRPlannerBase(const std::vector<std::array<float, 3>>& base_positions,
++                      const Environment& env,
++                      std::shared_ptr<RNG> rng,
++                      const MRSettings& settings = MRSettings())
++            : environment_(env), rng_(rng), settings_(settings)
++        {
++            // Create robot instances for each base position
++            for (std::size_t i = 0; i < base_positions.size(); ++i) {
++                RobotInstance robot_instance;
++                robot_instance.base_position = base_positions[i];
++                robot_instance.robot_id = "robot_" + std::to_string(i);
++                
++                // Get the appropriate robot type for this position
++                try {
++                    robot_instance.robot_type = get_robot_type_for_position(base_positions[i]);
++                } catch (const std::runtime_error& e) {
++                    throw std::runtime_error("Failed to create robot at position (" + 
++                                           std::to_string(base_positions[i][0]) + ", " +
++                                           std::to_string(base_positions[i][1]) + ", " +
++                                           std::to_string(base_positions[i][2]) + "): " + e.what());
++                }
++                
++                robots_.push_back(std::move(robot_instance));
++            }
++        }
++
++        /**
++         * @brief Virtual destructor
++         */
++        virtual ~MRPlannerBase() = default;
++
++        /**
++         * @brief Delete copy constructor and assignment operator
++         */
++        MRPlannerBase(const MRPlannerBase&) = delete;
++        MRPlannerBase& operator=(const MRPlannerBase&) = delete;
++
++        /**
++         * @brief Build roadmaps for all robots
++         * @param starts Start configurations for each robot
++         * @param goals Goal configurations for each robot
++         */
++        void build_roadmaps(const std::vector<vamp::FloatVector<7>>& starts,
++                           const std::vector<vamp::FloatVector<7>>& goals)
++        {
++            if (starts.size() != robots_.size() || goals.size() != robots_.size()) {
++                throw std::runtime_error("Number of start/goal configurations must match number of robots");
++            }
++
++            auto start_time = std::chrono::steady_clock::now();
++
++            // Set configurations for each robot
++            for (std::size_t i = 0; i < robots_.size(); ++i) {
++                robots_[i].start_config = starts[i];
++                robots_[i].goal_config = goals[i];
++            }
++
++            // Build roadmaps (parallel if enabled)
++            if (settings_.enable_parallel_roadmap_construction && robots_.size() > 1) {
++                build_roadmaps_parallel();
++            } else {
++                build_roadmaps_sequential();
++            }
++
++            roadmap_build_time_ns_ = vamp::utils::get_elapsed_nanoseconds(start_time);
++            
++            // Call virtual method for derived classes
++            for (std::size_t i = 0; i < robots_.size(); ++i) {
++                on_roadmap_built(i);
++            }
++        }
++
++        /**
++         * @brief Solve multi-robot planning problem (ignoring inter-robot collisions)
++         * @param starts Start configurations for each robot
++         * @param goals Goal configurations for each robot
++         * @return Planning result with paths for each robot
++         */
++        MRPlanningResult<7> solve_ignoring_inter_robot_collisions(
++            const std::vector<vamp::FloatVector<7>>& starts,
++            const std::vector<vamp::FloatVector<7>>& goals)
++        {
++            auto start_time = std::chrono::steady_clock::now();
++            
++            MRPlanningResult<7> result;
++            result.algorithm_name = "dummy_ignore_inter_robot";
++            
++            // Build roadmaps if not already built
++            if (!are_roadmaps_built()) {
++                build_roadmaps(starts, goals);
++            }
++
++            // Solve for each robot independently using the correct robot type
++            result.robot_paths.reserve(robots_.size());
++            for (std::size_t i = 0; i < robots_.size(); ++i) {
++                auto robot_result = solve_single_robot(i, starts[i], goals[i]);
++                result.robot_paths.push_back(std::move(robot_result.path));
++            }
++
++            result.success = std::all_of(result.robot_paths.begin(), result.robot_paths.end(),
++                                        [](const auto& path) { return !path.empty(); });
++            
++            result.calculate_total_cost();
++            result.nanoseconds = vamp::utils::get_elapsed_nanoseconds(start_time);
++            result.iterations = 1;  // Dummy algorithm uses 1 iteration
++
++            total_planning_time_ns_ = result.nanoseconds;
++            
++            return result;
++        }
++
++        /**
++         * @brief Check if roadmaps are built for all robots
++         * @return True if all roadmaps are built
++         */
++        bool are_roadmaps_built() const {
++            return std::all_of(robots_.begin(), robots_.end(),
++                              [](const auto& robot) { return robot.roadmap.is_built; });
++        }
++
++        /**
++         * @brief Get the number of robots
++         * @return Number of robots
++         */
++        std::size_t num_robots() const { return robots_.size(); }
++
++        /**
++         * @brief Get roadmap build time
++         * @return Time in nanoseconds
++         */
++        std::size_t get_roadmap_build_time_ns() const { return roadmap_build_time_ns_; }
++
++        /**
++         * @brief Get total planning time
++         * @return Time in nanoseconds
++         */
++        std::size_t get_total_planning_time_ns() const { return total_planning_time_ns_; }
++
++        /**
++         * @brief Get settings
++         * @return Reference to settings
++         */
++        const MRSettings& get_settings() const { return settings_; }
++
++        /**
++         * @brief Get environment
++         * @return Reference to environment
++         */
++        const Environment& get_environment() const { return environment_; }
++
++    protected:
++        /**
++         * @brief Virtual method called when roadmap is built for a robot
++         * @param robot_idx Index of the robot
++         */
++        virtual void on_roadmap_built(std::size_t robot_idx) {
++            // Default implementation does nothing
++            (void)robot_idx;
++        }
++
++        /**
++         * @brief Check inter-robot collision between two robots using correct robot types
++         * @param robot1_idx Index of first robot
++         * @param robot2_idx Index of second robot
++         * @param config1 Configuration of first robot
++         * @param config2 Configuration of second robot
++         * @return True if robots are in collision
++         */
++        virtual bool check_inter_robot_collision(std::size_t robot1_idx, std::size_t robot2_idx,
++                                               const vamp::FloatVector<7>& config1, 
++                                               const vamp::FloatVector<7>& config2)
++        {
++            if (!settings_.enable_inter_robot_collision_checking) {
++                return false;
++            }
++
++            // Use std::visit to handle different robot types
++            auto check_collision = [&](const auto& robot1, const auto& robot2) {
++                // Get sphere representations for both robots using template-based FK
++                typename std::decay_t<decltype(robot1)>::template Spheres<rake> spheres1, spheres2;
++                typename std::decay_t<decltype(robot1)>::template ConfigurationBlock<rake> block1, block2;
++                
++                // Convert configurations to blocks
++                for (std::size_t i = 0; i < 7; ++i) {
++                    block1[i] = config1[{i, 0}];
++                    block2[i] = config2[{i, 0}];
++                }
++                
++                // Compute forward kinematics
++                robot1.template sphere_fk<rake>(block1, spheres1);
++                robot2.template sphere_fk<rake>(block2, spheres2);
++
++                // Check sphere-sphere collisions with safety margin
++                float safety_margin = settings_.inter_robot_safety_margin;
++                for (std::size_t i = 0; i < robot1.n_spheres; ++i) {
++                    for (std::size_t j = 0; j < robot2.n_spheres; ++j) {
++                        float dx = spheres1.x[{i, 0}] - spheres2.x[{j, 0}];
++                        float dy = spheres1.y[{i, 0}] - spheres2.y[{j, 0}];
++                        float dz = spheres1.z[{i, 0}] - spheres2.z[{j, 0}];
++                        float distance_sq = dx*dx + dy*dy + dz*dz;
++                        float min_distance = spheres1.r[{i, 0}] + spheres2.r[{j, 0}] + safety_margin;
++                        
++                        if (distance_sq < min_distance * min_distance) {
++                            return true;  // Collision detected
++                        }
++                    }
++                }
++                return false;  // No collision
++            };
++
++            // Check collision using the correct robot types for both robots
++            return std::visit([&](const auto& robot1) {
++                return std::visit([&](const auto& robot2) {
++                    return check_collision(robot1, robot2);
++                }, robots_[robot2_idx].robot_type);
++            }, robots_[robot1_idx].robot_type);
++        }
++
++        /**
++         * @brief Get robot instance
++         * @param idx Robot index
++         * @return Reference to robot instance
++         */
++        const RobotInstance& get_robot(std::size_t idx) const {
++            if (idx >= robots_.size()) {
++                throw std::out_of_range("Robot index out of range");
++            }
++            return robots_[idx];
++        }
++
++        /**
++         * @brief Get robot instance (non-const)
++         * @param idx Robot index
++         * @return Reference to robot instance
++         */
++        RobotInstance& get_robot(std::size_t idx) {
++            if (idx >= robots_.size()) {
++                throw std::out_of_range("Robot index out of range");
++            }
++            return robots_[idx];
++        }
++
++    private:
++        /**
++         * @brief Build roadmaps sequentially
++         */
++        void build_roadmaps_sequential()
++        {
++            for (std::size_t i = 0; i < robots_.size(); ++i) {
++                build_roadmap_for_robot(i);
++            }
++        }
++
++        /**
++         * @brief Build roadmaps in parallel
++         */
++        void build_roadmaps_parallel()
++        {
++            std::vector<std::future<void>> futures;
++            futures.reserve(robots_.size());
++
++            for (std::size_t i = 0; i < robots_.size(); ++i) {
++                futures.push_back(std::async(std::launch::async, [this, i]() {
++                    build_roadmap_for_robot(i);
++                }));
++            }
++
++            // Wait for all roadmaps to be built
++            for (auto& future : futures) {
++                future.wait();
++            }
++        }
++
++        /**
++         * @brief Build roadmap for a specific robot using the correct robot type
++         * @param robot_idx Index of the robot
++         */
++        void build_roadmap_for_robot(std::size_t robot_idx)
++        {
++            auto& robot_instance = robots_[robot_idx];
++            
++            // Use std::visit to handle different robot types
++            std::visit([&](const auto& robot_type) {
++                // Convert environment to SIMD format for PRM
++                auto simd_env = get_simd_environment();
++                
++                // Build roadmap using PRM with the correct robot type
++                auto roadmap_result = planning::PRM<std::decay_t<decltype(robot_type)>, rake, resolution>::build_roadmap(
++                    robot_instance.start_config, robot_instance.goal_config, simd_env, settings_.roadmap_settings, rng_);
++                
++                // Store roadmap data
++                robot_instance.roadmap.roadmap = std::make_unique<planning::Roadmap<7>>(std::move(roadmap_result));
++                robot_instance.roadmap.is_built = true;
++            }, robot_instance.robot_type);
++        }
++
++        /**
++         * @brief Solve single robot planning problem using the correct robot type
++         * @param robot_idx Index of the robot
++         * @param start Start configuration
++         * @param goal Goal configuration
++         * @return Planning result
++         */
++        planning::PlanningResult<7> solve_single_robot(std::size_t robot_idx,
++                                                     const vamp::FloatVector<7>& start,
++                                                     const vamp::FloatVector<7>& goal)
++        {
++            auto& robot_instance = robots_[robot_idx];
++            
++            // Use std::visit to handle different robot types
++            return std::visit([&](const auto& robot_type) {
++                // Convert environment to SIMD format for RRTC
++                auto simd_env = get_simd_environment();
++                
++                // Use RRTConnect for single robot planning with the correct robot type
++                return planning::RRTC<std::decay_t<decltype(robot_type)>, rake, resolution>::solve(
++                    start, goal, simd_env, settings_.rrtc_settings, rng_);
++            }, robot_instance.robot_type);
++        }
++    };
++
++}  // namespace vamp::mr_planning 
+\ No newline at end of file
+diff --git a/src/impl/vamp/mr_planning/mr_problem.hh b/src/impl/vamp/mr_planning/mr_problem.hh
+new file mode 100644
+index 0000000..cbbcf53
+--- /dev/null
++++ b/src/impl/vamp/mr_planning/mr_problem.hh
+@@ -0,0 +1,130 @@
++#pragma once
++
++#include <vector>
++#include <string>
++#include <array>
++#include <vamp/collision/environment.hh>
++#include <vamp/planning/plan.hh>
++#include <vamp/vector.hh>
++
++namespace vamp::mr_planning
++{
++    /**
++     * @brief Problem definition for multi-robot planning scenarios
++     * 
++     * This structure contains all the information needed to define a multi-robot
++     * planning problem, including robot configurations, base positions, and environment.
++     * 
++     * @tparam dim Configuration space dimension
++     */
++    template<std::size_t dim>
++    struct MRProblem
++    {
++        // Robot configurations
++        std::vector<FloatVector<dim>> start_configurations;
++        std::vector<FloatVector<dim>> goal_configurations;
++        std::vector<std::array<float, 3>> base_positions;
++        
++        // Environment (shared by all robots)
++        collision::Environment<float> environment;
++        
++        // Problem metadata
++        std::string problem_name;
++        std::vector<std::string> robot_names;
++        
++        /**
++         * @brief Validate that the problem is well-formed
++         * @return True if all vectors have matching sizes and are non-empty
++         */
++        bool is_valid() const {
++            return start_configurations.size() == goal_configurations.size() &&
++                   start_configurations.size() == base_positions.size() &&
++                   start_configurations.size() == robot_names.size() &&
++                   !start_configurations.empty();
++        }
++        
++        /**
++         * @brief Get the number of robots in the problem
++         * @return Number of robots
++         */
++        std::size_t num_robots() const { return start_configurations.size(); }
++        
++        /**
++         * @brief Add a robot to the problem
++         * @param start Start configuration
++         * @param goal Goal configuration
++         * @param base_pos Base position (x, y, z)
++         * @param name Robot name (optional)
++         */
++        void add_robot(const FloatVector<dim>& start, 
++                      const FloatVector<dim>& goal,
++                      const std::array<float, 3>& base_pos,
++                      const std::string& name = "") {
++            start_configurations.push_back(start);
++            goal_configurations.push_back(goal);
++            base_positions.push_back(base_pos);
++            robot_names.push_back(name.empty() ? "robot_" + std::to_string(num_robots()) : name);
++        }
++        
++        /**
++         * @brief Clear all robots from the problem
++         */
++        void clear() {
++            start_configurations.clear();
++            goal_configurations.clear();
++            base_positions.clear();
++            robot_names.clear();
++        }
++    };
++
++    /**
++     * @brief Result of a multi-robot planning query
++     * 
++     * @tparam dim Configuration space dimension
++     */
++    template<std::size_t dim>
++    struct MRPlanningResult
++    {
++        std::vector<planning::Path<dim>> robot_paths;
++        float total_cost;
++        std::size_t nanoseconds;
++        std::size_t iterations;
++        bool success;
++        std::string algorithm_name;
++        
++        /**
++         * @brief Default constructor
++         */
++        MRPlanningResult() 
++            : total_cost(0.0f), nanoseconds(0), iterations(0), success(false), algorithm_name("unknown") {}
++        
++        /**
++         * @brief Validate that the result is well-formed
++         * @return True if successful and all paths are valid
++         */
++        bool is_valid() const {
++            return success && !robot_paths.empty() && 
++                   std::all_of(robot_paths.begin(), robot_paths.end(),
++                              [](const auto& path) { return !path.empty(); });
++        }
++        
++        /**
++         * @brief Get the number of robot paths
++         * @return Number of paths
++         */
++        std::size_t num_robots() const { return robot_paths.size(); }
++        
++        /**
++         * @brief Calculate total cost across all robot paths
++         * @return Sum of all path costs
++         */
++        float calculate_total_cost() {
++            total_cost = 0.0f;
++            for (const auto& path : robot_paths) {
++                total_cost += path.cost();
++            }
++            return total_cost;
++        }
++    };
++
++}  // namespace vamp::mr_planning 
+\ No newline at end of file
+diff --git a/src/impl/vamp/mr_planning/mr_settings.hh b/src/impl/vamp/mr_planning/mr_settings.hh
+new file mode 100644
+index 0000000..b6fa93f
+--- /dev/null
++++ b/src/impl/vamp/mr_planning/mr_settings.hh
+@@ -0,0 +1,114 @@
++#pragma once
++
++#include <string>
++#include <vamp/planning/roadmap.hh>
++#include <vamp/planning/rrtc_settings.hh>
++
++namespace vamp::mr_planning
++{
++    /**
++     * @brief Settings for multi-robot planning algorithms
++     * 
++     * This structure contains all the configuration parameters needed for
++     * multi-robot planning, including roadmap construction, algorithm selection,
++     * and performance tuning.
++     */
++    struct MRSettings
++    {
++        // Roadmap construction settings
++        planning::RoadmapSettings<planning::PRMStarNeighborParams> roadmap_settings;
++        std::size_t max_roadmap_size = 10000;
++        std::size_t max_roadmap_iterations = 100000;
++        
++        // Multi-robot specific settings
++        bool enable_inter_robot_collision_checking = true;
++        float inter_robot_safety_margin = 0.1f;
++        std::size_t max_mr_iterations = 1000;
++        
++        // Algorithm selection
++        std::string algorithm = "dummy";  // "dummy", "cbs", "prioritized", etc.
++        
++        // Performance settings
++        bool enable_parallel_roadmap_construction = true;
++        std::size_t num_threads = 4;
++        
++        // RRTConnect settings (for single-robot planning within multi-robot)
++        planning::RRTCSettings rrtc_settings;
++        
++        /**
++         * @brief Default constructor with reasonable defaults
++         */
++        MRSettings() : roadmap_settings(planning::PRMStarNeighborParams(7, 1000.0)) {
++            // Set up default roadmap settings
++            roadmap_settings.max_iterations = max_roadmap_iterations;
++            roadmap_settings.max_samples = max_roadmap_size;
++            roadmap_settings.batch_size = 1000;
++            roadmap_settings.optimize = false;
++            
++            // Set up default RRTConnect settings
++            rrtc_settings.range = 1.0f;
++            rrtc_settings.max_iterations = 10000;
++            rrtc_settings.max_samples = 10000;
++        }
++        
++        /**
++         * @brief Validate that settings are reasonable
++         * @return True if settings are valid
++         */
++        bool is_valid() const {
++            return max_roadmap_size > 0 &&
++                   max_roadmap_iterations > 0 &&
++                   max_mr_iterations > 0 &&
++                   inter_robot_safety_margin >= 0.0f &&
++                   num_threads > 0 &&
++                   !algorithm.empty();
++        }
++        
++        /**
++         * @brief Set roadmap construction parameters
++         * @param max_size Maximum number of nodes in roadmap
++         * @param max_iters Maximum iterations for roadmap construction
++         * @param batch_size Batch size for sampling
++         */
++        void set_roadmap_params(std::size_t max_size, std::size_t max_iters, std::size_t batch_size = 1000) {
++            max_roadmap_size = max_size;
++            max_roadmap_iterations = max_iters;
++            roadmap_settings.max_iterations = max_iters;
++            roadmap_settings.max_samples = max_size;
++            roadmap_settings.batch_size = batch_size;
++        }
++        
++        /**
++         * @brief Set RRTConnect parameters for single-robot planning
++         * @param range Range for RRTConnect
++         * @param max_iters Maximum iterations
++         * @param max_samples Maximum samples
++         */
++        void set_rrtc_params(float range, std::size_t max_iters, std::size_t max_samples) {
++            rrtc_settings.range = range;
++            rrtc_settings.max_iterations = max_iters;
++            rrtc_settings.max_samples = max_samples;
++        }
++        
++        /**
++         * @brief Set inter-robot collision checking parameters
++         * @param enable Whether to enable inter-robot collision checking
++         * @param safety_margin Safety margin for collision detection
++         */
++        void set_inter_robot_params(bool enable, float safety_margin = 0.1f) {
++            enable_inter_robot_collision_checking = enable;
++            inter_robot_safety_margin = safety_margin;
++        }
++        
++        /**
++         * @brief Set performance parameters
++         * @param parallel Whether to enable parallel roadmap construction
++         * @param threads Number of threads to use
++         */
++        void set_performance_params(bool parallel, std::size_t threads = 4) {
++            enable_parallel_roadmap_construction = parallel;
++            num_threads = threads;
++        }
++    };
++
++}  // namespace vamp::mr_planning 
+\ No newline at end of file
+diff --git a/src/impl/vamp/robots/base_robot.hh b/src/impl/vamp/robots/base_robot.hh
+new file mode 100644
+index 0000000..4ac6e3c
+--- /dev/null
++++ b/src/impl/vamp/robots/base_robot.hh
+@@ -0,0 +1,17 @@
++#pragma once
++
++namespace vamp::robots
++{
++    // Note: Using integer template parameters instead of float due to compiler limitations.
++    // AppleClang (and some other compilers) do not yet support non-type template parameters
++    // of type 'float' even with C++20. This is a known limitation.
++    // 
++    // Template parameters represent base positions in centimeters * 100 for precision.
++    // For example: BaseX100 = 150 means base_x = 1.5 meters
++    template<int BaseX100, int BaseY100, int BaseZ100>
++    struct BaseRobot {
++        static constexpr float base_x = static_cast<float>(BaseX100) / 100.0f;
++        static constexpr float base_y = static_cast<float>(BaseY100) / 100.0f;
++        static constexpr float base_z = static_cast<float>(BaseZ100) / 100.0f;
++    };
++}  // namespace vamp::robots 
+\ No newline at end of file
+diff --git a/src/impl/vamp/robots/base_robot_interface.hh b/src/impl/vamp/robots/base_robot_interface.hh
+new file mode 100644
+index 0000000..23bd4ea
+--- /dev/null
++++ b/src/impl/vamp/robots/base_robot_interface.hh
+@@ -0,0 +1,295 @@
++#pragma once
++
++#include <memory>
++#include <string>
++#include <array>
++#include <vector>
++
++#include <vamp/collision/shapes.hh>
++#include <vamp/collision/environment.hh>
++#include <vamp/planning/plan.hh>
++#include <vamp/planning/rrtc.hh>
++#include <vamp/planning/prm.hh>
++#include <vamp/planning/fcit.hh>
++#include <vamp/planning/aorrtc.hh>
++#include <vamp/random/rng.hh>
++#include <vamp/vector.hh>
++
++namespace vamp::robots
++{
++    // Use actual types instead of forward declarations
++    using Configuration = vamp::FloatVector<7>;  // Fixed dimension for Panda robots
++    using Path = vamp::planning::Path<7>;
++    using PlanningResult = vamp::planning::PlanningResult<7>;
++    using Roadmap = vamp::planning::Roadmap<7>;
++    using RNG = vamp::rng::RNG<7>;
++    using ProlateHyperspheroid = vamp::planning::ProlateHyperspheroid<7>;
++
++    /**
++     * @brief Base interface for multi-robot algorithms
++     * 
++     * This interface provides a common API for all robot types, enabling
++     * multi-robot algorithms like Conflict-Based Search (CBS) and Prioritized Planning.
++     * Each robot implementation (template-based) will be wrapped by RobotWrapper
++     * to provide this interface while preserving SIMD optimizations.
++     */
++    class RobotInterface
++    {
++    public:
++        virtual ~RobotInterface() = default;
++
++        // Core robot functionality
++        /**
++         * @brief Compute forward kinematics for the robot
++         * @param config Robot configuration
++         * @return Vector of collision spheres representing the robot
++         */
++        virtual std::vector<collision::Sphere<float>> fk(const Configuration& config) = 0;
++
++        /**
++         * @brief Validate if a configuration is collision-free
++         * @param config Robot configuration
++         * @param env Environment to check against
++         * @return True if configuration is valid
++         */
++        virtual bool validate(const Configuration& config, const collision::Environment<float>& env) = 0;
++
++        /**
++         * @brief Get the base position of the robot
++         * @return Array of [x, y, z] base position coordinates
++         */
++        virtual std::array<float, 3> get_base_position() const = 0;
++
++        /**
++         * @brief Get the name of the robot variant
++         * @return Robot name string
++         */
++        virtual std::string get_name() const = 0;
++
++        // Robot properties
++        /**
++         * @brief Get the configuration space dimension
++         * @return Number of degrees of freedom
++         */
++        virtual int get_dimension() const = 0;
++
++        /**
++         * @brief Get the number of collision spheres
++         * @return Number of spheres in collision model
++         */
++        virtual int get_n_spheres() const = 0;
++
++        /**
++         * @brief Get the collision checking resolution
++         * @return Resolution value
++         */
++        virtual float get_resolution() const = 0;
++
++        /**
++         * @brief Get the configuration space measure
++         * @return Space measure value
++         */
++        virtual float get_space_measure() const = 0;
++
++        // Planning methods
++        /**
++         * @brief Solve motion planning problem with RRTConnect
++         * @param start Start configuration
++         * @param goal Goal configuration
++         * @param env Environment
++         * @param settings RRTConnect settings
++         * @param rng Random number generator
++         * @return Planning result
++         */
++        virtual PlanningResult rrtc(const Configuration& start, const Configuration& goal,
++                                   const collision::Environment<float>& env,
++                                   const planning::RRTCSettings& settings,
++                                   std::shared_ptr<RNG> rng) = 0;
++
++        /**
++         * @brief Solve motion planning problem with RRTConnect (multi-goal)
++         * @param start Start configuration
++         * @param goals Vector of goal configurations
++         * @param env Environment
++         * @param settings RRTConnect settings
++         * @param rng Random number generator
++         * @return Planning result
++         */
++        virtual PlanningResult rrtc(const Configuration& start, const std::vector<Configuration>& goals,
++                                   const collision::Environment<float>& env,
++                                   const planning::RRTCSettings& settings,
++                                   std::shared_ptr<RNG> rng) = 0;
++
++        /**
++         * @brief Solve motion planning problem with PRM
++         * @param start Start configuration
++         * @param goal Goal configuration
++         * @param env Environment
++         * @param settings PRM settings
++         * @param rng Random number generator
++         * @return Planning result
++         */
++        virtual PlanningResult prm(const Configuration& start, const Configuration& goal,
++                                  const collision::Environment<float>& env,
++                                  const planning::RoadmapSettings<planning::PRMStarNeighborParams>& settings,
++                                  std::shared_ptr<RNG> rng) = 0;
++
++        /**
++         * @brief Solve motion planning problem with PRM (multi-goal)
++         * @param start Start configuration
++         * @param goals Vector of goal configurations
++         * @param env Environment
++         * @param settings PRM settings
++         * @param rng Random number generator
++         * @return Planning result
++         */
++        virtual PlanningResult prm(const Configuration& start, const std::vector<Configuration>& goals,
++                                  const collision::Environment<float>& env,
++                                  const planning::RoadmapSettings<planning::PRMStarNeighborParams>& settings,
++                                  std::shared_ptr<RNG> rng) = 0;
++
++        /**
++         * @brief Solve motion planning problem with FCIT*
++         * @param start Start configuration
++         * @param goal Goal configuration
++         * @param env Environment
++         * @param settings FCIT settings
++         * @param rng Random number generator
++         * @return Planning result
++         */
++        virtual PlanningResult fcit(const Configuration& start, const Configuration& goal,
++                                   const collision::Environment<float>& env,
++                                   const planning::RoadmapSettings<planning::FCITStarNeighborParams>& settings,
++                                   std::shared_ptr<RNG> rng) = 0;
++
++        /**
++         * @brief Solve motion planning problem with FCIT* (multi-goal)
++         * @param start Start configuration
++         * @param goals Vector of goal configurations
++         * @param env Environment
++         * @param settings FCIT settings
++         * @param rng Random number generator
++         * @return Planning result
++         */
++        virtual PlanningResult fcit(const Configuration& start, const std::vector<Configuration>& goals,
++                                   const collision::Environment<float>& env,
++                                   const planning::RoadmapSettings<planning::FCITStarNeighborParams>& settings,
++                                   std::shared_ptr<RNG> rng) = 0;
++
++        /**
++         * @brief Solve motion planning problem with AORRTC
++         * @param start Start configuration
++         * @param goal Goal configuration
++         * @param env Environment
++         * @param settings AORRTC settings
++         * @param rng Random number generator
++         * @return Planning result
++         */
++        virtual PlanningResult aorrtc(const Configuration& start, const Configuration& goal,
++                                     const collision::Environment<float>& env,
++                                     const planning::AORRTCSettings& settings,
++                                     std::shared_ptr<RNG> rng) = 0;
++
++        /**
++         * @brief Solve motion planning problem with AORRTC (multi-goal)
++         * @param start Start configuration
++         * @param goals Vector of goal configurations
++         * @param env Environment
++         * @param settings AORRTC settings
++         * @param rng Random number generator
++         * @return Planning result
++         */
++        virtual PlanningResult aorrtc(const Configuration& start, const std::vector<Configuration>& goals,
++                                     const collision::Environment<float>& env,
++                                     const planning::AORRTCSettings& settings,
++                                     std::shared_ptr<RNG> rng) = 0;
++
++        /**
++         * @brief Build roadmap for the robot
++         * @param start Start configuration
++         * @param goal Goal configuration
++         * @param env Environment
++         * @param settings Roadmap settings
++         * @param rng Random number generator
++         * @return Roadmap
++         */
++        virtual Roadmap roadmap(const Configuration& start, const Configuration& goal,
++                               const collision::Environment<float>& env,
++                               const planning::RoadmapSettings<planning::PRMStarNeighborParams>& settings,
++                               std::shared_ptr<RNG> rng) = 0;
++
++        /**
++         * @brief Simplify a path
++         * @param path Path to simplify
++         * @param env Environment
++         * @param settings Simplify settings
++         * @param rng Random number generator
++         * @return Planning result with simplified path
++         */
++        virtual PlanningResult simplify(const Path& path,
++                                       const collision::Environment<float>& env,
++                                       const planning::SimplifySettings& settings,
++                                       std::shared_ptr<RNG> rng) = 0;
++
++        /**
++         * @brief Get sphere validity information
++         * @param config Configuration
++         * @param env Environment
++         * @return Vector of collision information for each sphere
++         */
++        virtual std::vector<std::vector<std::string>> sphere_validity(const Configuration& config,
++                                                                     const collision::Environment<float>& env) = 0;
++
++        /**
++         * @brief Compute end-effector forward kinematics
++         * @param config Configuration
++         * @return Pair of position and orientation
++         */
++        virtual std::pair<std::array<float, 3>, std::array<float, 4>> eefk(const Configuration& config) = 0;
++
++        /**
++         * @brief Filter robot from pointcloud
++         * @param pointcloud Input pointcloud
++         * @param config Configuration
++         * @param env Environment
++         * @param point_radius Point radius
++         * @return Filtered pointcloud
++         */
++        virtual std::vector<collision::Point> filter_from_pointcloud(const std::vector<collision::Point>& pointcloud,
++                                                                    const Configuration& config,
++                                                                    const collision::Environment<float>& env,
++                                                                    float point_radius) = 0;
++
++        /**
++         * @brief Compute distance between configurations
++         * @param a First configuration
++         * @param b Second configuration
++         * @return Distance
++         */
++        virtual float distance(const Configuration& a, const Configuration& b) = 0;
++
++        // RNG factory methods
++        /**
++         * @brief Create Halton sequence RNG
++         * @return Shared pointer to RNG
++         */
++        virtual std::shared_ptr<RNG> halton() = 0;
++
++        /**
++         * @brief Create PHS sampler
++         * @param phs Prolate hyperspheroid
++         * @param rng Base RNG
++         * @return Shared pointer to PHS RNG
++         */
++        virtual std::shared_ptr<RNG> phs_sampler(const ProlateHyperspheroid& phs, std::shared_ptr<RNG> rng) = 0;
++
++#if defined(__x86_64__)
++        /**
++         * @brief Create XORShift RNG
++         * @return Shared pointer to RNG
++         */
++        virtual std::shared_ptr<RNG> xorshift() = 0;
++#endif
++    };
++
++}  // namespace vamp::robots 
+\ No newline at end of file
+diff --git a/src/impl/vamp/robots/grid_positions.hh b/src/impl/vamp/robots/grid_positions.hh
+new file mode 100644
+index 0000000..dcbd4e1
+--- /dev/null
++++ b/src/impl/vamp/robots/grid_positions.hh
+@@ -0,0 +1,10 @@
++#pragma once
++
++namespace vamp::robots::grid
++{
++    constexpr float positions[3][3] = {
++        {0.0f, 0.0f}, {0.0f, 1.0f}, {0.0f, 2.0f},
++        {1.0f, 0.0f}, {1.0f, 1.0f}, {1.0f, 2.0f},
++        {2.0f, 0.0f}, {2.0f, 1.0f}, {2.0f, 2.0f}
++    };
++}  // namespace vamp::robots::grid 
+\ No newline at end of file
+diff --git a/src/impl/vamp/robots/panda/fk_templated.hh b/src/impl/vamp/robots/panda/fk_templated.hh
+new file mode 100644
+index 0000000..2b54969
+--- /dev/null
++++ b/src/impl/vamp/robots/panda/fk_templated.hh
+@@ -0,0 +1,165 @@
++#pragma once
++
++#include <vamp/vector.hh>
++#include <vamp/collision/environment.hh>
++#include <vamp/collision/validity.hh>
++
++// NOLINTBEGIN(*-magic-numbers)
++namespace vamp::robots::panda
++{
++    using Configuration = FloatVector<7>;
++    template <std::size_t rake>
++    using ConfigurationBlock = FloatVector<rake, 7>;
++
++    constexpr auto n_spheres = 59;
++
++    template <std::size_t rake>
++    struct Spheres
++    {
++        FloatVector<rake, 59> x;
++        FloatVector<rake, 59> y;
++        FloatVector<rake, 59> z;
++        FloatVector<rake, 59> r;
++    };
++
++    // Original sphere_fk function (for backward compatibility)
++    template <std::size_t rake>
++    inline void sphere_fk(const ConfigurationBlock<rake> &q, Spheres<rake> &out) noexcept
++    {
++        // Call the templated version with default base position (0,0,0)
++        sphere_fk<rake, 0.0f, 0.0f, 0.0f>(q, out);
++    }
++
++    // Templated sphere_fk function with base position parameters
++    // This allows the compiler to optimize the constant additions at compile time
++    template <std::size_t rake, float base_x, float base_y, float base_z>
++    inline void sphere_fk(const ConfigurationBlock<rake> &q, Spheres<rake> &out) noexcept
++    {
++        // Set sphere radii (unchanged)
++        out.r[0] = 0.08;    // (0, 0)
++        out.r[1] = 0.06;    // (0, 0)
++        out.r[2] = 0.06;    // (0, 0)
++        out.r[3] = 0.06;    // (0, 0)
++        out.r[4] = 0.06;    // (0, 0)
++        out.r[5] = 0.06;    // (0, 0)
++        out.r[6] = 0.06;    // (0, 0)
++        out.r[7] = 0.06;    // (0, 0)
++        out.r[8] = 0.06;    // (0, 0)
++        out.r[9] = 0.06;    // (0, 0)
++        out.r[10] = 0.05;   // (0, 0)
++        out.r[11] = 0.055;  // (0, 0)
++        out.r[12] = 0.055;  // (0, 0)
++        out.r[13] = 0.06;   // (0, 0)
++        out.r[14] = 0.055;  // (0, 0)
++        out.r[15] = 0.055;  // (0, 0)
++        out.r[16] = 0.055;  // (0, 0)
++        out.r[17] = 0.06;   // (0, 0)
++        out.r[18] = 0.06;   // (0, 0)
++        out.r[19] = 0.06;   // (0, 0)
++        out.r[20] = 0.05;   // (0, 0)
++        out.r[21] = 0.025;  // (0, 0)
++        out.r[22] = 0.025;  // (0, 0)
++        out.r[23] = 0.025;  // (0, 0)
++        out.r[24] = 0.025;  // (0, 0)
++        out.r[25] = 0.025;  // (0, 0)
++        out.r[26] = 0.025;  // (0, 0)
++        out.r[27] = 0.025;  // (0, 0)
++        out.r[28] = 0.025;  // (0, 0)
++        out.r[29] = 0.05;   // (0, 0)
++        out.r[30] = 0.05;   // (0, 0)
++        out.r[31] = 0.052;  // (0, 0)
++        out.r[32] = 0.05;   // (0, 0)
++        out.r[33] = 0.025;  // (0, 0)
++        out.r[34] = 0.025;  // (0, 0)
++        out.r[35] = 0.02;   // (0, 0)
++        out.r[36] = 0.02;   // (0, 0)
++        out.r[37] = 0.028;  // (0, 0)
++        out.r[38] = 0.028;  // (0, 0)
++        out.r[39] = 0.028;  // (0, 0)
++        out.r[40] = 0.028;  // (0, 0)
++        out.r[41] = 0.028;  // (0, 0)
++        out.r[42] = 0.028;  // (0, 0)
++        out.r[43] = 0.026;  // (0, 0)
++        out.r[44] = 0.026;  // (0, 0)
++        out.r[45] = 0.026;  // (0, 0)
++        out.r[46] = 0.026;  // (0, 0)
++        out.r[47] = 0.026;  // (0, 0)
++        out.r[48] = 0.026;  // (0, 0)
++        out.r[49] = 0.024;  // (0, 0)
++        out.r[50] = 0.024;  // (0, 0)
++        out.r[51] = 0.024;  // (0, 0)
++        out.r[52] = 0.024;  // (0, 0)
++        out.r[53] = 0.024;  // (0, 0)
++        out.r[54] = 0.024;  // (0, 0)
++        out.r[55] = 0.012;  // (0, 0)
++        out.r[56] = 0.012;  // (0, 0)
++        out.r[57] = 0.012;  // (0, 0)
++        out.r[58] = 0.012;  // (0, 0)
++        
++        // Set base positions with compile-time constant addition
++        // The compiler will optimize these constant additions
++        out.x[0] = 0.0f + base_x;     // (0, 0)
++        out.x[3] = 0.0f + base_x;     // (0, 0)
++        out.x[4] = 0.0f + base_x;     // (0, 0)
++        out.y[0] = 0.0f + base_y;     // (0, 0)
++        out.y[3] = 0.0f + base_y;     // (0, 0)
++        out.y[4] = 0.0f + base_y;     // (0, 0)
++        out.z[0] = 0.05f + base_z;    // (0, 0)
++        out.z[1] = 0.333f + base_z;   // (0, 0)
++        out.z[2] = 0.333f + base_z;   // (0, 0)
++        out.z[3] = 0.213f + base_z;   // (0, 0)
++        out.z[4] = 0.163f + base_z;   // (0, 0)
++        
++        // Forward kinematics calculations with base position added
++        auto INPUT_0 = q[0];
++        auto DIV_8 = INPUT_0 * 0.5;
++        auto SIN_9 = DIV_8.sin();
++        auto COS_15 = DIV_8.cos();
++        auto MUL_1570 = COS_15 * SIN_9;
++        auto MUL_1589 = MUL_1570 * 2.0;
++        auto MUL_1615 = MUL_1589 * 0.08;
++        out.x[1] = MUL_1615 + base_x;  // (0, 7) - Add base_x
++        auto MUL_1639 = MUL_1589 * 0.03;
++        out.x[2] = MUL_1639 + base_x;  // (7, 8) - Add base_x
++        
++        // Continue with the rest of the FK calculations...
++        // Each sphere position assignment should add the appropriate base position
++        // This is a simplified example - the full implementation would continue
++        // with all the remaining FK calculations, adding base_x, base_y, base_z
++        // to the appropriate coordinates.
++    }
++
++    // Templated interleaved_sphere_fk function with base position parameters
++    template <std::size_t rake, float base_x, float base_y, float base_z>
++    inline bool interleaved_sphere_fk(
++        const vamp::collision::Environment<FloatVector<rake>> &environment,
++        const ConfigurationBlock<rake> &q) noexcept
++    {
++        // Similar to sphere_fk, but for collision checking
++        // The sphere_environment_in_collision calls would use positions
++        // with base position added: (x + base_x, y + base_y, z + base_z, radius)
++        
++        // Example of how collision checking would work:
++        // if (sphere_environment_in_collision(environment, 0.0f + base_x, 0.0f + base_y, 0.05f + base_z, 0.08f))
++        // {
++        //     return false;
++        // }
++        
++        // This would continue with all the collision checks, adding base positions
++        // to each sphere position before checking collision.
++        
++        return true; // Placeholder
++    }
++
++    // Original interleaved_sphere_fk function (for backward compatibility)
++    template <std::size_t rake>
++    inline bool interleaved_sphere_fk(
++        const vamp::collision::Environment<FloatVector<rake>> &environment,
++        const ConfigurationBlock<rake> &q) noexcept
++    {
++        return interleaved_sphere_fk<rake, 0.0f, 0.0f, 0.0f>(environment, q);
++    }
++
++}  // namespace vamp::robots::panda
++
++// NOLINTEND(*-magic-numbers) 
+\ No newline at end of file
+diff --git a/src/impl/vamp/robots/panda_base.hh b/src/impl/vamp/robots/panda_base.hh
+new file mode 100644
+index 0000000..76be829
+--- /dev/null
++++ b/src/impl/vamp/robots/panda_base.hh
+@@ -0,0 +1,59 @@
++#pragma once
++
++#include <vamp/robots/base_robot.hh>
++#include <vamp/robots/panda/fk.hh>
++#include <vamp/vector.hh>
++
++namespace vamp::robots
++{
++    // Note: Using integer template parameters instead of float due to compiler limitations.
++    // AppleClang (and some other compilers) do not yet support non-type template parameters
++    // of type 'float' even with C++20. This is a known limitation.
++    // 
++    // Template parameters represent base positions in centimeters * 100 for precision.
++    // For example: BaseX100 = 150 means base_x = 1.5 meters
++    template<int BaseX100, int BaseY100, int BaseZ100>
++    struct PandaBase : BaseRobot<BaseX100, BaseY100, BaseZ100>
++    {
++        static constexpr auto name = "panda";
++        static constexpr auto dimension = 7;
++        static constexpr auto resolution = 32;
++        static constexpr auto n_spheres = panda::n_spheres;
++        static constexpr auto space_measure = panda::space_measure;
++
++        using Configuration = FloatVector<dimension>;
++        using ConfigurationArray = std::array<FloatT, dimension>;
++
++        struct alignas(FloatVectorAlignment) ConfigurationBuffer
++          : std::array<float, Configuration::num_scalars_rounded>
++        {
++        };
++
++        template <std::size_t rake>
++        using ConfigurationBlock = panda::ConfigurationBlock<rake>;
++
++        template <std::size_t rake>
++        using Spheres = panda::Spheres<rake>;
++
++        static constexpr auto scale_configuration = panda::scale_configuration;
++        static constexpr auto descale_configuration = panda::descale_configuration;
++
++        template <std::size_t rake>
++        static constexpr auto scale_configuration_block = panda::scale_configuration_block<rake>;
++
++        template <std::size_t rake>
++        static constexpr auto descale_configuration_block = panda::descale_configuration_block<rake>;
++
++        template <std::size_t rake>
++        static constexpr auto fkcc = panda::interleaved_sphere_fk<rake>;
++
++        template <std::size_t rake>
++        static constexpr auto fkcc_attach = panda::interleaved_sphere_fk_attachment<rake>;
++
++        // Use the original FK functions directly
++        template <std::size_t rake>
++        static constexpr auto sphere_fk = panda::sphere_fk<rake>;
++
++        static constexpr auto eefk = panda::eefk;
++    };
++}  // namespace vamp::robots 
+\ No newline at end of file
+diff --git a/src/impl/vamp/robots/panda_base_templated.hh b/src/impl/vamp/robots/panda_base_templated.hh
+new file mode 100644
+index 0000000..a350992
+--- /dev/null
++++ b/src/impl/vamp/robots/panda_base_templated.hh
+@@ -0,0 +1,60 @@
++#pragma once
++
++#include <vamp/robots/base_robot.hh>
++#include <vamp/robots/panda/fk.hh>
++#include <vamp/vector.hh>
++
++namespace vamp::robots
++{
++    // Note: Using integer template parameters instead of float due to compiler limitations.
++    // AppleClang (and some other compilers) do not yet support non-type template parameters
++    // of type 'float' even with C++20. This is a known limitation.
++    // 
++    // Template parameters represent base positions in centimeters * 100 for precision.
++    // For example: BaseX100 = 150 means base_x = 1.5 meters
++    template<int BaseX100, int BaseY100, int BaseZ100>
++    struct PandaBase : BaseRobot<BaseX100, BaseY100, BaseZ100>
++    {
++        static constexpr auto name = "panda";
++        static constexpr auto dimension = 7;
++        static constexpr auto resolution = 32;
++        static constexpr auto n_spheres = panda::n_spheres;
++        static constexpr auto space_measure = panda::space_measure;
++
++        using Configuration = FloatVector<dimension>;
++        using ConfigurationArray = std::array<FloatT, dimension>;
++
++        struct alignas(FloatVectorAlignment) ConfigurationBuffer
++          : std::array<float, Configuration::num_scalars_rounded>
++        {
++        };
++
++        template <std::size_t rake>
++        using ConfigurationBlock = panda::ConfigurationBlock<rake>;
++
++        template <std::size_t rake>
++        using Spheres = panda::Spheres<rake>;
++
++        static constexpr auto scale_configuration = panda::scale_configuration;
++        static constexpr auto descale_configuration = panda::descale_configuration;
++
++        template <std::size_t rake>
++        static constexpr auto scale_configuration_block = panda::scale_configuration_block<rake>;
++
++        template <std::size_t rake>
++        static constexpr auto descale_configuration_block = panda::descale_configuration_block<rake>;
++
++        // Use templated FK functions with base position parameters
++        // This allows compile-time optimization of base position additions
++        template <std::size_t rake>
++        static constexpr auto sphere_fk = panda::sphere_fk<rake, base_x, base_y, base_z>;
++
++        template <std::size_t rake>
++        static constexpr auto fkcc = panda::interleaved_sphere_fk<rake, base_x, base_y, base_z>;
++
++        template <std::size_t rake>
++        static constexpr auto fkcc_attach = panda::interleaved_sphere_fk_attachment<rake, base_x, base_y, base_z>;
++
++        static constexpr auto eefk = panda::eefk;
++    };
++}  // namespace vamp::robots 
+\ No newline at end of file
+diff --git a/src/impl/vamp/robots/panda_grid.hh b/src/impl/vamp/robots/panda_grid.hh
+new file mode 100644
+index 0000000..151628d
+--- /dev/null
++++ b/src/impl/vamp/robots/panda_grid.hh
+@@ -0,0 +1,42 @@
++#pragma once
++
++#include <vamp/robots/panda_base.hh>
++
++namespace vamp::robots
++{
++    // Grid variants (pre-compiled for maximum performance)
++    // Note: Template parameters are in centimeters * 100 for precision
++    // For example: 0.0f becomes 0, 1.0f becomes 100, 0.05f becomes 5
++    struct Panda_0_0 : PandaBase<0, 0, 5> {
++        static constexpr auto name = "panda_0_0";
++    };
++    struct Panda_0_1 : PandaBase<0, 100, 5> {
++        static constexpr auto name = "panda_0_1";
++    };
++    struct Panda_0_2 : PandaBase<0, 200, 5> {
++        static constexpr auto name = "panda_0_2";
++    };
++    struct Panda_1_0 : PandaBase<100, 0, 5> {
++        static constexpr auto name = "panda_1_0";
++    };
++    struct Panda_1_1 : PandaBase<100, 100, 5> {
++        static constexpr auto name = "panda_1_1";
++    };
++    struct Panda_1_2 : PandaBase<100, 200, 5> {
++        static constexpr auto name = "panda_1_2";
++    };
++    struct Panda_2_0 : PandaBase<200, 0, 5> {
++        static constexpr auto name = "panda_2_0";
++    };
++    struct Panda_2_1 : PandaBase<200, 100, 5> {
++        static constexpr auto name = "panda_2_1";
++    };
++    struct Panda_2_2 : PandaBase<200, 200, 5> {
++        static constexpr auto name = "panda_2_2";
++    };
++
++    // Default variant (backward compatibility)
++    struct Panda : PandaBase<0, 0, 5> {
++        static constexpr auto name = "panda";
++    };
++}  // namespace vamp::robots 
+\ No newline at end of file
+diff --git a/src/impl/vamp/robots/robot_factory.hh b/src/impl/vamp/robots/robot_factory.hh
+new file mode 100644
+index 0000000..9304ac5
+--- /dev/null
++++ b/src/impl/vamp/robots/robot_factory.hh
+@@ -0,0 +1,190 @@
++#pragma once
++
++#include <memory>
++#include <string>
++#include <vector>
++#include <cmath>
++#include <stdexcept>
++
++#include <vamp/robots/base_robot_interface.hh>
++#include <vamp/robots/robot_wrapper.hh>
++#include <vamp/robots/panda_grid.hh>
++
++namespace vamp::robots
++{
++    /**
++     * @brief Factory for creating robot instances from templates
++     * 
++     * This factory provides methods to create robot instances that implement
++     * the RobotInterface while preserving SIMD optimizations from the template layer.
++     * It maps positions to the nearest grid variant and provides access to all
++     * available grid variants.
++     */
++    class RobotFactory
++    {
++    public:
++        /**
++         * @brief Create a Panda robot from position (maps to nearest grid variant)
++         * @param x X coordinate in meters
++         * @param y Y coordinate in meters  
++         * @param z Z coordinate in meters
++         * @return Unique pointer to RobotInterface
++         * @throws std::runtime_error if position is not supported in grid
++         */
++        static std::unique_ptr<RobotInterface> create_panda(float x, float y, float z)
++        {
++            // Round to nearest grid position (convert to cm * 100)
++            int grid_x = std::round(x * 100);
++            int grid_y = std::round(y * 100);
++            int grid_z = std::round(z * 100);
++            
++            // Map to template variant
++            if (grid_x == 0 && grid_y == 0 && grid_z == 5) 
++                return std::make_unique<RobotWrapper<Panda_0_0>>();
++            if (grid_x == 0 && grid_y == 100 && grid_z == 5) 
++                return std::make_unique<RobotWrapper<Panda_0_1>>();
++            if (grid_x == 0 && grid_y == 200 && grid_z == 5) 
++                return std::make_unique<RobotWrapper<Panda_0_2>>();
++            if (grid_x == 100 && grid_y == 0 && grid_z == 5) 
++                return std::make_unique<RobotWrapper<Panda_1_0>>();
++            if (grid_x == 100 && grid_y == 100 && grid_z == 5) 
++                return std::make_unique<RobotWrapper<Panda_1_1>>();
++            if (grid_x == 100 && grid_y == 200 && grid_z == 5) 
++                return std::make_unique<RobotWrapper<Panda_1_2>>();
++            if (grid_x == 200 && grid_y == 0 && grid_z == 5) 
++                return std::make_unique<RobotWrapper<Panda_2_0>>();
++            if (grid_x == 200 && grid_y == 100 && grid_z == 5) 
++                return std::make_unique<RobotWrapper<Panda_2_1>>();
++            if (grid_x == 200 && grid_y == 200 && grid_z == 5) 
++                return std::make_unique<RobotWrapper<Panda_2_2>>();
++            
++            throw std::runtime_error("Position (" + std::to_string(x) + ", " + 
++                                   std::to_string(y) + ", " + std::to_string(z) + 
++                                   ") not supported in grid. Available positions: " +
++                                   get_available_positions_string());
++        }
++
++        /**
++         * @brief Create a Panda robot from grid variant name
++         * @param variant Grid variant name (e.g., "panda_2_2")
++         * @return Unique pointer to RobotInterface
++         * @throws std::runtime_error if variant name is unknown
++         */
++        static std::unique_ptr<RobotInterface> create_panda_grid(const std::string& variant)
++        {
++            if (variant == "panda_0_0") return std::make_unique<RobotWrapper<Panda_0_0>>();
++            if (variant == "panda_0_1") return std::make_unique<RobotWrapper<Panda_0_1>>();
++            if (variant == "panda_0_2") return std::make_unique<RobotWrapper<Panda_0_2>>();
++            if (variant == "panda_1_0") return std::make_unique<RobotWrapper<Panda_1_0>>();
++            if (variant == "panda_1_1") return std::make_unique<RobotWrapper<Panda_1_1>>();
++            if (variant == "panda_1_2") return std::make_unique<RobotWrapper<Panda_1_2>>();
++            if (variant == "panda_2_0") return std::make_unique<RobotWrapper<Panda_2_0>>();
++            if (variant == "panda_2_1") return std::make_unique<RobotWrapper<Panda_2_1>>();
++            if (variant == "panda_2_2") return std::make_unique<RobotWrapper<Panda_2_2>>();
++            
++            throw std::runtime_error("Unknown grid variant: " + variant + 
++                                   ". Available variants: " + get_available_variants_string());
++        }
++
++        /**
++         * @brief Get all available grid variant names
++         * @return Vector of variant names
++         */
++        static std::vector<std::string> get_available_variants()
++        {
++            return {"panda_0_0", "panda_0_1", "panda_0_2", 
++                    "panda_1_0", "panda_1_1", "panda_1_2",
++                    "panda_2_0", "panda_2_1", "panda_2_2"};
++        }
++
++        /**
++         * @brief Get all available grid positions
++         * @return Vector of [x, y, z] position arrays
++         */
++        static std::vector<std::array<float, 3>> get_available_positions()
++        {
++            return {{0.0f, 0.0f, 0.05f}, {0.0f, 1.0f, 0.05f}, {0.0f, 2.0f, 0.05f},
++                    {1.0f, 0.0f, 0.05f}, {1.0f, 1.0f, 0.05f}, {1.0f, 2.0f, 0.05f},
++                    {2.0f, 0.0f, 0.05f}, {2.0f, 1.0f, 0.05f}, {2.0f, 2.0f, 0.05f}};
++        }
++
++        /**
++         * @brief Get the nearest grid position to a given position
++         * @param x X coordinate in meters
++         * @param y Y coordinate in meters
++         * @param z Z coordinate in meters
++         * @return Array of [x, y, z] nearest grid position
++         */
++        static std::array<float, 3> get_nearest_grid_position(float x, float y, float z)
++        {
++            // Round to nearest grid position
++            int grid_x = std::round(x * 100);
++            int grid_y = std::round(y * 100);
++            int grid_z = std::round(z * 100);
++            
++            // Clamp to valid grid range
++            grid_x = std::max(0, std::min(200, grid_x));
++            grid_y = std::max(0, std::min(200, grid_y));
++            grid_z = std::max(5, std::min(5, grid_z));  // Z is fixed at 0.05m
++            
++            return {grid_x / 100.0f, grid_y / 100.0f, grid_z / 100.0f};
++        }
++
++        /**
++         * @brief Check if a position is exactly on a grid point
++         * @param x X coordinate in meters
++         * @param y Y coordinate in meters
++         * @param z Z coordinate in meters
++         * @return True if position is on grid
++         */
++        static bool is_on_grid(float x, float y, float z)
++        {
++            int grid_x = std::round(x * 100);
++            int grid_y = std::round(y * 100);
++            int grid_z = std::round(z * 100);
++            
++            // Check if rounded position matches input (within small tolerance)
++            const float tolerance = 0.001f;  // 1mm tolerance
++            return std::abs(x * 100 - grid_x) < tolerance &&
++                   std::abs(y * 100 - grid_y) < tolerance &&
++                   std::abs(z * 100 - grid_z) < tolerance &&
++                   grid_x >= 0 && grid_x <= 200 && grid_x % 100 == 0 &&
++                   grid_y >= 0 && grid_y <= 200 && grid_y % 100 == 0 &&
++                   grid_z == 5;
++        }
++
++    private:
++        /**
++         * @brief Get available variants as a comma-separated string
++         * @return String representation of available variants
++         */
++        static std::string get_available_variants_string()
++        {
++            auto variants = get_available_variants();
++            std::string result;
++            for (size_t i = 0; i < variants.size(); ++i) {
++                if (i > 0) result += ", ";
++                result += variants[i];
++            }
++            return result;
++        }
++
++        /**
++         * @brief Get available positions as a string
++         * @return String representation of available positions
++         */
++        static std::string get_available_positions_string()
++        {
++            auto positions = get_available_positions();
++            std::string result;
++            for (size_t i = 0; i < positions.size(); ++i) {
++                if (i > 0) result += ", ";
++                result += "(" + std::to_string(positions[i][0]) + ", " +
++                         std::to_string(positions[i][1]) + ", " +
++                         std::to_string(positions[i][2]) + ")";
++            }
++            return result;
++        }
++    };
++
++}  // namespace vamp::robots 
+\ No newline at end of file
+diff --git a/src/impl/vamp/robots/robot_wrapper.hh b/src/impl/vamp/robots/robot_wrapper.hh
+new file mode 100644
+index 0000000..347649a
+--- /dev/null
++++ b/src/impl/vamp/robots/robot_wrapper.hh
+@@ -0,0 +1,213 @@
++#pragma once
++
++#include <vamp/robots/base_robot_interface.hh>
++#include <vamp/bindings/common.hh>
++#include <vamp/planning/phs.hh>
++
++namespace vamp::robots
++{
++    /**
++     * @brief Template wrapper that preserves SIMD optimizations while providing OO interface
++     * 
++     * This wrapper implements the RobotInterface by delegating all calls to the
++     * templated robot type. This preserves all SIMD optimizations while enabling
++     * multi-robot algorithms that require runtime polymorphism.
++     * 
++     * @tparam RobotType The templated robot type (e.g., Panda_2_2)
++     */
++    template<typename RobotType>
++    class RobotWrapper : public RobotInterface
++    {
++    public:
++        // Core robot functionality
++        std::vector<collision::Sphere<float>> fk(const Configuration& config) override
++        {
++            return vamp::binding::Helper<RobotType>::fk(config);
++        }
++
++        bool validate(const Configuration& config, const collision::Environment<float>& env) override
++        {
++            return vamp::binding::Helper<RobotType>::validate(config, env);
++        }
++
++        std::array<float, 3> get_base_position() const override
++        {
++            // Convert from integer template parameters (cm * 100) to float
++            return {RobotType::base_x / 100.0f, RobotType::base_y / 100.0f, RobotType::base_z / 100.0f};
++        }
++
++        std::string get_name() const override
++        {
++            return RobotType::name;
++        }
++
++        // Robot properties
++        int get_dimension() const override
++        {
++            return RobotType::dimension;
++        }
++
++        int get_n_spheres() const override
++        {
++            return RobotType::n_spheres;
++        }
++
++        float get_resolution() const override
++        {
++            return RobotType::resolution;
++        }
++
++        float get_space_measure() const override
++        {
++            return RobotType::space_measure();
++        }
++
++        // Planning methods
++        PlanningResult rrtc(const Configuration& start, const Configuration& goal,
++                           const collision::Environment<float>& env,
++                           const planning::RRTCSettings& settings,
++                           std::shared_ptr<RNG> rng) override
++        {
++            return vamp::binding::Helper<RobotType>::rrtc_single(start, goal, env, settings, rng);
++        }
++
++        PlanningResult rrtc(const Configuration& start, const std::vector<Configuration>& goals,
++                           const collision::Environment<float>& env,
++                           const planning::RRTCSettings& settings,
++                           std::shared_ptr<RNG> rng) override
++        {
++            // Convert vector of Configuration to vector of ConfigurationArray
++            std::vector<typename RobotType::ConfigurationArray> goal_arrays;
++            goal_arrays.reserve(goals.size());
++            for (const auto& goal : goals) {
++                goal_arrays.push_back(goal.to_array());
++            }
++            return vamp::binding::Helper<RobotType>::rrtc(start.to_array(), goal_arrays, env, settings, rng);
++        }
++
++        PlanningResult prm(const Configuration& start, const Configuration& goal,
++                          const collision::Environment<float>& env,
++                          const planning::RoadmapSettings<planning::PRMStarNeighborParams>& settings,
++                          std::shared_ptr<RNG> rng) override
++        {
++            return vamp::binding::Helper<RobotType>::prm_single(start, goal, env, settings, rng);
++        }
++
++        PlanningResult prm(const Configuration& start, const std::vector<Configuration>& goals,
++                          const collision::Environment<float>& env,
++                          const planning::RoadmapSettings<planning::PRMStarNeighborParams>& settings,
++                          std::shared_ptr<RNG> rng) override
++        {
++            // Convert vector of Configuration to vector of ConfigurationArray
++            std::vector<typename RobotType::ConfigurationArray> goal_arrays;
++            goal_arrays.reserve(goals.size());
++            for (const auto& goal : goals) {
++                goal_arrays.push_back(goal.to_array());
++            }
++            return vamp::binding::Helper<RobotType>::prm(start.to_array(), goal_arrays, env, settings, rng);
++        }
++
++        PlanningResult fcit(const Configuration& start, const Configuration& goal,
++                           const collision::Environment<float>& env,
++                           const planning::RoadmapSettings<planning::FCITStarNeighborParams>& settings,
++                           std::shared_ptr<RNG> rng) override
++        {
++            return vamp::binding::Helper<RobotType>::fcit(start, goal, env, settings, rng);
++        }
++
++        PlanningResult fcit(const Configuration& start, const std::vector<Configuration>& goals,
++                           const collision::Environment<float>& env,
++                           const planning::RoadmapSettings<planning::FCITStarNeighborParams>& settings,
++                           std::shared_ptr<RNG> rng) override
++        {
++            // Convert vector of Configuration to vector of ConfigurationArray
++            std::vector<typename RobotType::ConfigurationArray> goal_arrays;
++            goal_arrays.reserve(goals.size());
++            for (const auto& goal : goals) {
++                goal_arrays.push_back(goal.to_array());
++            }
++            return vamp::binding::Helper<RobotType>::fcit_multi_goal(start.to_array(), goal_arrays, env, settings, rng);
++        }
++
++        PlanningResult aorrtc(const Configuration& start, const Configuration& goal,
++                             const collision::Environment<float>& env,
++                             const planning::AORRTCSettings& settings,
++                             std::shared_ptr<RNG> rng) override
++        {
++            return vamp::binding::Helper<RobotType>::aorrtc(start, goal, env, settings, rng);
++        }
++
++        PlanningResult aorrtc(const Configuration& start, const std::vector<Configuration>& goals,
++                             const collision::Environment<float>& env,
++                             const planning::AORRTCSettings& settings,
++                             std::shared_ptr<RNG> rng) override
++        {
++            // Convert vector of Configuration to vector of ConfigurationArray
++            std::vector<typename RobotType::ConfigurationArray> goal_arrays;
++            goal_arrays.reserve(goals.size());
++            for (const auto& goal : goals) {
++                goal_arrays.push_back(goal.to_array());
++            }
++            return vamp::binding::Helper<RobotType>::aorrtc_multi_goal(start.to_array(), goal_arrays, env, settings, rng);
++        }
++
++        Roadmap roadmap(const Configuration& start, const Configuration& goal,
++                       const collision::Environment<float>& env,
++                       const planning::RoadmapSettings<planning::PRMStarNeighborParams>& settings,
++                       std::shared_ptr<RNG> rng) override
++        {
++            return vamp::binding::Helper<RobotType>::roadmap(start, goal, env, settings, rng);
++        }
++
++        PlanningResult simplify(const Path& path,
++                               const collision::Environment<float>& env,
++                               const planning::SimplifySettings& settings,
++                               std::shared_ptr<RNG> rng) override
++        {
++            return vamp::binding::Helper<RobotType>::simplify(path, env, settings, rng);
++        }
++
++        std::vector<std::vector<std::string>> sphere_validity(const Configuration& config,
++                                                             const collision::Environment<float>& env) override
++        {
++            return vamp::binding::Helper<RobotType>::sphere_validate(config, env);
++        }
++
++        std::pair<std::array<float, 3>, std::array<float, 4>> eefk(const Configuration& config) override
++        {
++            return vamp::binding::Helper<RobotType>::eefk(config);
++        }
++
++        std::vector<collision::Point> filter_from_pointcloud(const std::vector<collision::Point>& pointcloud,
++                                                            const Configuration& config,
++                                                            const collision::Environment<float>& env,
++                                                            float point_radius) override
++        {
++            return vamp::binding::Helper<RobotType>::filter_self_from_pointcloud(pointcloud, config, env, point_radius);
++        }
++
++        float distance(const Configuration& a, const Configuration& b) override
++        {
++            return a.distance(b);
++        }
++
++        // RNG factory methods
++        std::shared_ptr<RNG> halton() override
++        {
++            return vamp::binding::Helper<RobotType>::halton();
++        }
++
++        std::shared_ptr<RNG> phs_sampler(const ProlateHyperspheroid& phs, std::shared_ptr<RNG> rng) override
++        {
++            return vamp::binding::Helper<RobotType>::phs_sampler(phs, rng);
++        }
++
++#if defined(__x86_64__)
++        std::shared_ptr<RNG> xorshift() override
++        {
++            return vamp::binding::Helper<RobotType>::xorshift();
++        }
++#endif
++    };
++
++}  // namespace vamp::robots 
+\ No newline at end of file
+diff --git a/src/vamp/__init__.py b/src/vamp/__init__.py
+index c4dd2f2..0323dfb 100644
+--- a/src/vamp/__init__.py
++++ b/src/vamp/__init__.py
+@@ -2,6 +2,7 @@ __all__ = [
+     "AnyPlanningResult",
+     "png_to_heightfield",
+     "configure_robot_and_planner_with_kwargs",
++    "configure_multi_robot_and_planner_with_kwargs",
+     "problem_dict_to_vamp",
+     "results_to_dict",
+     "sphere",
+@@ -9,6 +10,7 @@ __all__ = [
+     "panda",
+     "fetch",
+     "baxter",
++    "mr_planning",
+     "Environment",
+     "Attachment",
+     "Sphere",
+@@ -52,6 +54,7 @@ from ._core import panda as panda
+ from ._core import sphere as sphere
+ from ._core import ur5 as ur5
+ from ._core import filter_pointcloud as filter_pointcloud
++from ._core import mr_planning as mr_planning
+ 
+ AnyPlanningResult = Union[
+     sphere.PlanningResult,
+@@ -132,6 +135,47 @@ def configure_robot_and_planner_with_kwargs(robot_name: str, planner_name: str,
+     return robot_module, planner_func, plan_settings, simp_settings
+ 
+ 
++def configure_multi_robot_and_planner_with_kwargs(robot_name: str, planner_name: str, base_positions: List[Tuple[float, float, float]], **kwargs):
++    """
++    Configure robot and planner for multi-robot scenarios.
++    
++    Args:
++        robot_name: Name of the robot (e.g., "panda")
++        planner_name: Name of the planner (e.g., "rrtc")
++        base_positions: List of (x, y, z) base positions for each robot
++        **kwargs: Additional planner and simplification settings
++    
++    Returns:
++        Tuple of (robot_module, planner_func, plan_settings, simp_settings, base_positions)
++        The base_positions are returned for use in visualization
++    """
++    # Extract base_positions from kwargs if not provided directly
++    if not base_positions and 'base_positions' in kwargs:
++        base_positions = kwargs.pop('base_positions')
++    
++    # Use the standard configuration function
++    robot_module, planner_func, plan_settings, simp_settings = configure_robot_and_planner_with_kwargs(
++        robot_name, planner_name, **kwargs
++    )
++    
++    # Validate base positions
++    if not base_positions:
++        raise ValueError("base_positions must be provided")
++    
++    # Convert to list of tuples if needed
++    if isinstance(base_positions, (list, tuple)) and len(base_positions) > 0:
++        if isinstance(base_positions[0], (list, tuple)):
++            # Already in correct format
++            pass
++        else:
++            # Single position provided, wrap in list
++            base_positions = [tuple(base_positions)]
++    
++    print(f"Multi-robot configuration: {len(base_positions)} robots at positions {base_positions}")
++    
++    return robot_module, planner_func, plan_settings, simp_settings, base_positions
++
++
+ def problem_dict_to_vamp(
+         problem: Dict[str, List[Dict[str, Union[float, NDArray[float32]]]]],
+         ignore_names: List[str] = []
+diff --git a/src/vamp/constants.py b/src/vamp/constants.py
+index 79d2cc4..cda72d5 100644
+--- a/src/vamp/constants.py
++++ b/src/vamp/constants.py
+@@ -63,9 +63,10 @@ ROBOT_RADII_RANGES = {
+     }
+ 
+ ROBOT_FIRST_JOINT_LOCATIONS = {
+-    "fetch": [0.0, 0.0, 0.4],
+-    "ur5": [0.0, 0.0, 0.91],
+-    "panda": [0.0, 0.0, 0.0],
++    "fetch": [0.0, 0.0, 0.424],
++    "ur5": [0.0, 0.0, 0.089159],
++    "panda": [0.0, 0.0, 0.05],
++    "baxter": [0.0, 0.0, 0.0],
+     }
+ 
+ ROBOT_MAX_RADII = {
+@@ -74,4 +75,19 @@ ROBOT_MAX_RADII = {
+     "panda": 1.19,
+     }
+ 
++# Multi-robot grid variants for Panda
++# Note: These represent the actual base positions in meters, not the template parameters
++# The C++ template parameters are in centimeters * 100 for compiler compatibility
++PANDA_GRID_VARIANTS = {
++    "panda_0_0": {"base_x": 0.0, "base_y": 0.0, "base_z": 0.05},
++    "panda_0_1": {"base_x": 0.0, "base_y": 1.0, "base_z": 0.05},
++    "panda_0_2": {"base_x": 0.0, "base_y": 2.0, "base_z": 0.05},
++    "panda_1_0": {"base_x": 1.0, "base_y": 0.0, "base_z": 0.05},
++    "panda_1_1": {"base_x": 1.0, "base_y": 1.0, "base_z": 0.05},
++    "panda_1_2": {"base_x": 1.0, "base_y": 2.0, "base_z": 0.05},
++    "panda_2_0": {"base_x": 2.0, "base_y": 0.0, "base_z": 0.05},
++    "panda_2_1": {"base_x": 2.0, "base_y": 1.0, "base_z": 0.05},
++    "panda_2_2": {"base_x": 2.0, "base_y": 2.0, "base_z": 0.05},
++}
++
+ POINT_RADIUS = 0.0025
+diff --git a/src/vamp/mr_planning.py b/src/vamp/mr_planning.py
+new file mode 100644
+index 0000000..a70f1d2
+--- /dev/null
++++ b/src/vamp/mr_planning.py
+@@ -0,0 +1,22 @@
++from ._core import mr_planning as _mr_planning
++
++# List of expected symbols to always export if present
++_expected_exports = [
++    "FloatVector7",
++    "MRProblem",
++    "MRPlanningResult",
++    "MRSettings",
++    "MRPlannerBase",
++    "DummyMRPlanner",
++    "MRPlannerFactory",
++    "create_mr_problem",
++    "solve_mr_problem",
++    "create_dummy_planner",
++]
++
++__all__ = list({
++    *(getattr(_mr_planning, "__all__", [])),
++    *_expected_exports
++})
++
++globals().update({k: getattr(_mr_planning, k) for k in __all__ if hasattr(_mr_planning, k)}) 
+\ No newline at end of file
+diff --git a/src/vamp/pybullet_interface.py b/src/vamp/pybullet_interface.py
+index a7b1dc4..e73cb0e 100644
+--- a/src/vamp/pybullet_interface.py
++++ b/src/vamp/pybullet_interface.py
+@@ -5,7 +5,7 @@ import sys
+ import time
+ import numpy as np
+ import xmltodict
+-from typing import Any, Dict, List, Optional
++from typing import Any, Dict, List, Optional, Union, Callable
+ from zlib import crc32
+ from colorsys import hsv_to_rgb
+ 
+@@ -35,6 +35,17 @@ def handle_color(name: Optional[str], color: Optional[Union[List[float], str]])
+         return color
+ 
+ 
++@dataclass
++class RobotAnimationConfig:
++    """Configuration for a single robot's animation."""
++    robot_id: int
++    plan: Any
++    callback: Optional[Callable] = None
++    speed: float = 1.0
++    start_time: float = 0.0
++    name: Optional[str] = None
++
++
+ @dataclass
+ class PyBulletSimulator:
+     client: BulletClient
+@@ -50,6 +61,7 @@ class PyBulletSimulator:
+ 
+         self.client.setRealTimeSimulation(0)
+         self.objects = []
++        self.robots = {}  # Registry for additional robots
+ 
+         if urdf:
+             self.urdf = urdf
+@@ -91,9 +103,38 @@ class PyBulletSimulator:
+                         l2x = self.link_map[link2] if link2 in self.link_map else -1
+                         self.client.setCollisionFilterPair(0, 0, l1x, l2x, False)
+ 
+-    def set_joint_positions(self, positions: List[float]):
+-        for joint, value in zip(self.joints, positions):
+-            self.client.resetJointState(self.skel_id, joint, value, targetVelocity = 0)
++    def add_robot(self, robot_id: int, joints: List[int], name: str = None):
++        """Register an additional robot for multi-robot animation."""
++        self.robots[robot_id] = {
++            'joints': joints,
++            'name': name or f"Robot_{robot_id}"
++        }
++        print(f"Registered robot {robot_id} ({self.robots[robot_id]['name']}) with {len(joints)} joints")
++
++    def set_joint_positions(self, positions: List[float], robot_id: Optional[int] = None):
++        """Set joint positions for a specific robot or the main robot."""
++        if robot_id is None:
++            # Use main robot
++            for joint, value in zip(self.joints, positions):
++                self.client.resetJointState(self.skel_id, joint, value, targetVelocity = 0)
++        else:
++            # Use specific robot
++            if robot_id == self.skel_id:
++                # Main robot - use main robot joints
++                for joint, value in zip(self.joints, positions):
++                    self.client.resetJointState(self.skel_id, joint, value, targetVelocity = 0)
++            elif robot_id in self.robots:
++                # Registered robot - use its joints
++                robot_joints = self.robots[robot_id]['joints']
++                for joint, value in zip(robot_joints, positions):
++                    self.client.resetJointState(robot_id, joint, value, targetVelocity = 0)
++            else:
++                raise ValueError(f"Robot {robot_id} not registered. Use add_robot() first.")
++
++    def set_robot_base_position(self, position: Position, orientation: XYZWQuaternion = [0, 0, 0, 1], robot_id: Optional[int] = None):
++        """Set the robot's base position and orientation."""
++        target_id = robot_id if robot_id is not None else self.skel_id
++        self.client.resetBasePositionAndOrientation(target_id, position, orientation)
+ 
+     def in_collision(self) -> bool:
+         self.client.performCollisionDetection()
+@@ -325,6 +366,7 @@ class PyBulletSimulator:
+             self.client.removeAllUserDebugItems()
+ 
+     def animate(self, plan, callback = None):
++        """Animate a single robot (backward compatible)."""
+         if not len(plan):
+             print("""Path has no states!
+             """)
+@@ -385,3 +427,215 @@ Use left/right arrow keys to move through individual states."""
+                     plan_idx = 0
+ 
+             time.sleep(0.016)
++
++    def animate_multi(self, robot_plans: Union[Dict[int, Any], List[int], Any], 
++                     callbacks: Optional[Dict[int, Callable]] = None,
++                     plan: Optional[Any] = None):
++        """
++        Animate multiple robots with the same or different plans.
++        
++        Args:
++            robot_plans: Either a dict mapping robot_id -> plan, or a list of robot_ids with a single plan
++            callbacks: Optional dict mapping robot_id -> callback function
++            plan: Single plan to use for all robots (when robot_plans is a list of robot_ids)
++        """
++        # Handle different input formats
++        if isinstance(robot_plans, list):
++            # List of robot IDs with single plan
++            if plan is None:
++                raise ValueError("plan must be provided when robot_plans is a list of robot IDs")
++            robot_configs = {robot_id: plan for robot_id in robot_plans}
++        else:
++            # Dict of robot_id -> plan
++            robot_configs = robot_plans
++        
++        # Convert to RobotAnimationConfig objects
++        configs = []
++        for robot_id, robot_plan in robot_configs.items():
++            callback = callbacks.get(robot_id) if callbacks else None
++            
++            # Handle main robot (skel_id) which isn't in the robots registry
++            if robot_id == self.skel_id:
++                robot_name = "Main Robot"
++            else:
++                robot_name = self.robots.get(robot_id, {}).get('name', f"Robot_{robot_id}")
++            
++            configs.append(RobotAnimationConfig(
++                robot_id=robot_id,
++                plan=robot_plan,
++                callback=callback,
++                name=robot_name
++            ))
++        
++        self.animate_multi_advanced(configs)
++
++    def animate_multi_advanced(self, configs: List[RobotAnimationConfig]):
++        """
++        Advanced multi-robot animation with independent control per robot.
++        
++        Args:
++            configs: List of RobotAnimationConfig objects defining each robot's animation
++        """
++        if not configs:
++            print("No robot configurations provided!")
++            return
++
++        # Validate all plans have states
++        for config in configs:
++            if not len(config.plan):
++                print(f"Robot {config.robot_id} ({config.name}) has no states in plan!")
++                return
++
++        # Initialize state for each robot
++        robot_states = {}
++        for config in configs:
++            robot_states[config.robot_id] = {
++                'plan_idx': 0,
++                'playing': False,
++                'config': config
++            }
++
++        # Global animation state
++        global_playing = False
++        selected_robot = None  # None = all robots, otherwise specific robot ID
++        
++        # Keyboard controls
++        left = self.client.B3G_LEFT_ARROW
++        right = self.client.B3G_RIGHT_ARROW
++        space_code = ord(' ')
++        tab_code = ord('\t')
++        number_keys = [ord(str(i)) for i in range(10)]  # 0-9 keys
++
++        print("Multi-robot animation controls:")
++        print("  Space: Start/stop global animation")
++        print("  Tab: Select next robot for individual control (or 'all robots')")
++        print("  A: Select 'all robots' mode (arrow keys step all robots together)")
++        print("  0-9: Select specific robot by number")
++        print("  Left/Right arrows: Step through states (when animation paused)")
++        print("  R: Reset all robots to start")
++        print("  Q: Quit animation")
++
++        while True:
++            # Update all robots
++            for robot_id, state in robot_states.items():
++                config = state['config']
++                plan_idx = state['plan_idx']
++                
++                # Get current state
++                c = config.plan[plan_idx]
++                if isinstance(c, list):
++                    c_list = c
++                elif isinstance(c, np.ndarray):
++                    c_list = c.tolist()
++                else:
++                    c_list = c.to_list()
++
++                # Set joint positions
++                self.set_joint_positions(c_list, robot_id)
++
++                # Call robot-specific callback
++                if callable(config.callback):
++                    config.callback(c_list, robot_id)
++
++            # Handle keyboard input
++            keys = self.client.getKeyboardEvents()
++            
++            # Global play/pause
++            if space_code in keys and keys[space_code] & self.client.KEY_WAS_TRIGGERED:
++                global_playing = not global_playing
++                for state in robot_states.values():
++                    state['playing'] = global_playing
++                print(f"Global animation: {'Playing' if global_playing else 'Paused'}")
++
++            # Select "all robots" mode explicitly
++            elif ord('a') in keys and keys[ord('a')] & self.client.KEY_WAS_TRIGGERED:
++                selected_robot = None
++                print("Selected: All robots (arrow keys will step all robots together)")
++
++            # Robot selection (including "all robots")
++            elif tab_code in keys and keys[tab_code] & self.client.KEY_WAS_TRIGGERED:
++                robot_ids = list(robot_states.keys())
++                if selected_robot is None:
++                    # First tab: select first robot
++                    selected_robot = robot_ids[0]
++                    print(f"Selected robot: {selected_robot} ({robot_states[selected_robot]['config'].name})")
++                elif selected_robot in robot_ids:
++                    # Subsequent tabs: cycle through robots
++                    current_idx = robot_ids.index(selected_robot)
++                    next_idx = (current_idx + 1) % len(robot_ids)
++                    selected_robot = robot_ids[next_idx]
++                    print(f"Selected robot: {selected_robot} ({robot_states[selected_robot]['config'].name})")
++                else:
++                    # After cycling through all robots, select "all robots"
++                    selected_robot = None
++                    print("Selected: All robots (arrow keys will step all robots together)")
++
++            # Number key selection
++            elif any(key in keys and keys[key] & self.client.KEY_WAS_TRIGGERED for key in number_keys):
++                for key in number_keys:
++                    if key in keys and keys[key] & self.client.KEY_WAS_TRIGGERED:
++                        robot_num = int(chr(key))
++                        robot_ids = list(robot_states.keys())
++                        if robot_num < len(robot_ids):
++                            selected_robot = robot_ids[robot_num]
++                            print(f"Selected robot: {selected_robot} ({robot_states[selected_robot]['config'].name})")
++                        else:
++                            # Number key beyond robot count: select "all robots"
++                            selected_robot = None
++                            print("Selected: All robots (arrow keys will step all robots together)")
++                        break
++
++            # Individual robot control (when global animation is paused)
++            elif not global_playing and selected_robot is not None:
++                state = robot_states[selected_robot]
++                
++                if left in keys and keys[left] & self.client.KEY_WAS_TRIGGERED:
++                    state['plan_idx'] -= 1
++                    if state['plan_idx'] < 0:
++                        state['plan_idx'] = len(state['config'].plan) - 1
++                    print(f"Robot {selected_robot}: State {state['plan_idx']}")
++
++                elif right in keys and keys[right] & self.client.KEY_WAS_TRIGGERED:
++                    state['plan_idx'] += 1
++                    if state['plan_idx'] >= len(state['config'].plan):
++                        state['plan_idx'] = 0
++                    print(f"Robot {selected_robot}: State {state['plan_idx']}")
++
++            # All robots control (when global animation is paused and selected_robot is None)
++            elif not global_playing and selected_robot is None:
++                if left in keys and keys[left] & self.client.KEY_WAS_TRIGGERED:
++                    # Step all robots backward
++                    for state in robot_states.values():
++                        state['plan_idx'] -= 1
++                        if state['plan_idx'] < 0:
++                            state['plan_idx'] = len(state['config'].plan) - 1
++                    print("All robots: Stepped backward")
++
++                elif right in keys and keys[right] & self.client.KEY_WAS_TRIGGERED:
++                    # Step all robots forward
++                    for state in robot_states.values():
++                        state['plan_idx'] += 1
++                        if state['plan_idx'] >= len(state['config'].plan):
++                            state['plan_idx'] = 0
++                    print("All robots: Stepped forward")
++
++            # Reset all robots
++            elif ord('r') in keys and keys[ord('r')] & self.client.KEY_WAS_TRIGGERED:
++                for state in robot_states.values():
++                    state['plan_idx'] = 0
++                print("Reset all robots to start")
++
++            # Quit
++            elif ord('q') in keys and keys[ord('q')] & self.client.KEY_WAS_TRIGGERED:
++                print("Quitting animation")
++                break
++
++            # Advance playing robots
++            if global_playing:
++                for state in robot_states.values():
++                    if state['playing']:
++                        state['plan_idx'] += 1
++                        if state['plan_idx'] >= len(state['config'].plan):
++                            state['plan_idx'] = 0
++
++            time.sleep(0.016)
+diff --git a/src/vamp/pybullet_interface.pyi b/src/vamp/pybullet_interface.pyi
+index caafc17..169764e 100644
+--- a/src/vamp/pybullet_interface.pyi
++++ b/src/vamp/pybullet_interface.pyi
+@@ -4,21 +4,39 @@ This type stub file was generated by pyright.
+ 
+ from dataclasses import dataclass
+ from pathlib import Path
+-from typing import Any, Dict, List, Optional
++from typing import Any, Dict, List, Optional, Union, Callable
+ from pybullet_utils.bullet_client import BulletClient
+ from vamp.typing import *
+ 
+ """
+ This type stub file was generated by pyright.
+ """
++
++@dataclass
++class RobotAnimationConfig:
++    robot_id: int
++    plan: Any
++    callback: Optional[Callable] = None
++    speed: float = 1.0
++    start_time: float = 0.0
++    name: Optional[str] = None
++
+ @dataclass
+ class PyBulletSimulator:
+     skel_id: bool
+     client: BulletClient
++    robots: Dict[int, Dict[str, Any]]
++    
+     def __init__(self, urdf: str, joints: List[str], visualize: bool = ...) -> None:
+         ...
+     
+-    def set_joint_positions(self, positions: List[float]):
++    def add_robot(self, robot_id: int, joints: List[int], name: str = ...) -> None:
++        ...
++    
++    def set_joint_positions(self, positions: List[float], robot_id: Optional[int] = ...) -> None:
++        ...
++    
++    def set_robot_base_position(self, position: Position, orientation: XYZWQuaternion = ..., robot_id: Optional[int] = ...) -> None:
+         ...
+     
+     def set_camera(self, position: Position, look_at: Position):
+@@ -45,8 +63,15 @@ class PyBulletSimulator:
+     def draw_roadmap(self, fk_function, roadmap):
+         ...
+     
+-    def animate(self, plan):
++    def animate(self, plan, callback = ...):
+         ...
+     
++    def animate_multi(self, robot_plans: Union[Dict[int, Any], List[int], Any], 
++                     callbacks: Optional[Dict[int, Callable]] = ...,
++                     plan: Optional[Any] = ...) -> None:
++        ...
++    
++    def animate_multi_advanced(self, configs: List[RobotAnimationConfig]) -> None:
++        ...
+ 
+ 

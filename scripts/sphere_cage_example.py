@@ -49,20 +49,13 @@ def main(
     sampler = getattr(vamp_module, sampler_name)()
     sampler.skip(skip_rng_iterations)
 
-    # Test validation in empty environment
-    empty_env = vamp.Environment()
-    start_valid_empty = vamp.panda.validate(a, empty_env)
-    goal_valid_empty = vamp.panda.validate(b, empty_env)
-    print(f"Start config valid in empty env: {start_valid_empty}")
-    print(f"Goal config valid in empty env: {goal_valid_empty}")
-
     if benchmark:
         random.seed(0)
         np.random.seed(0)
 
         results = []
         spheres = [np.array(sphere) for sphere in problem]
-        for trial in range(n_trials):
+        for _ in range(n_trials):
             random.shuffle(spheres)
             spheres_copy = copy.deepcopy(spheres)
 
@@ -71,37 +64,12 @@ def main(
                 sphere += np.random.uniform(low = -variation, high = variation, size = (3, ))
                 e.add_sphere(vamp.Sphere(sphere, radius))
 
-            # Debug: Check validation
-            start_valid = vamp.panda.validate(a, e)
-            goal_valid = vamp.panda.validate(b, e)
-            
-            if not start_valid:
-                print(f"Trial {trial}: Start configuration invalid")
-                continue
-            if not goal_valid:
-                print(f"Trial {trial}: Goal configuration invalid")
-                continue
-
-            if start_valid and goal_valid:
+            if vamp.panda.validate(a, e) and vamp.panda.validate(b, e):
                 result = planner_func(a, b, e, plan_settings, sampler)
                 simple = vamp_module.simplify(result.path, e, simp_settings, sampler)
                 results.append(vamp.results_to_dict(result, simple))
-                print(f"Trial {trial}: Success - added result")
-            else:
-                print(f"Trial {trial}: Validation failed - start: {start_valid}, goal: {goal_valid}")
 
         df = pd.DataFrame.from_dict(results)
-
-        # Debug: Print the results to see what's happening
-        print(f"Number of results: {len(results)}")
-        if results:
-            print(f"First result keys: {list(results[0].keys())}")
-            print(f"First result: {results[0]}")
-        else:
-            print("No results found!")
-            print("This means all trials failed validation or planning.")
-            print("Try reducing the sphere radius or adjusting the start/goal configurations.")
-            return
 
         # Convert to microseconds
         df["planning_time"] = df["planning_time"].dt.microseconds
@@ -136,16 +104,7 @@ def main(
 
         simple.path.interpolate_to_resolution(vamp.panda.resolution())
 
-        # Use the new multi-robot system for single robot (demonstrates backward compatibility)
-        print("Single robot animation using new multi-robot system:")
-        print("Press space to start/stop animation, use left/right arrows to step through states")
-        
-        # Method 1: Use the original animate function (backward compatible)
         sim.animate(simple.path)
-        
-        # Method 2: Use the new multi-robot system for single robot
-        # This demonstrates how the new system can handle single robots too
-        # sim.animate_multi([sim.skel_id], plan=simple.path)
 
 
 if __name__ == "__main__":

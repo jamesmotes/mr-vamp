@@ -31,7 +31,7 @@ project(
 )
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
@@ -50,7 +50,6 @@ list(APPEND VAMP_EXT_SOURCES
   src/impl/vamp/bindings/python.cc
   src/impl/vamp/bindings/environment.cc
   src/impl/vamp/bindings/settings.cc
-  src/impl/vamp/bindings/mr_planning.cc
 )
 
 list(APPEND VAMP_ROBOT_MODULES
@@ -88,32 +87,31 @@ target_link_libraries(_core_ext
     Eigen3::Eigen
 )
 
-# Temporarily disable stub generation to fix build issues
-# if($ENV{GITHUB_ACTIONS})
-#   set(STUB_PREFIX "")
-# else()
-#   set(STUB_PREFIX "${CMAKE_BINARY_DIR}/stubs/")
-# endif()
+if($ENV{GITHUB_ACTIONS})
+  set(STUB_PREFIX "")
+else()
+  set(STUB_PREFIX "${CMAKE_BINARY_DIR}/stubs/")
+endif()
 
-# nanobind_add_stub(
-#   vamp_stub
-#   MODULE _core_ext
-#   OUTPUT "${STUB_PREFIX}__init__.pyi"
-#   PYTHON_PATH $<TARGET_FILE_DIR:_core_ext>
-#   DEPENDS _core_ext
-#   VERBOSE
-# )
+nanobind_add_stub(
+  vamp_stub
+  MODULE _core_ext
+  OUTPUT "${STUB_PREFIX}__init__.pyi"
+  PYTHON_PATH $<TARGET_FILE_DIR:_core_ext>
+  DEPENDS _core_ext
+  VERBOSE
+)
 
-# foreach(robot_name IN LISTS VAMP_ROBOT_MODULES)
-#   nanobind_add_stub(
-#     "vamp_${robot_name}_stub"
-#     MODULE "_core_ext.${robot_name}"
-#     OUTPUT "${STUB_PREFIX}${robot_name}.pyi"
-#     PYTHON_PATH $<TARGET_FILE_DIR:_core_ext>
-#     DEPENDS _core_ext
-#     VERBOSE
-#   )
-# endforeach()
+foreach(robot_name IN LISTS VAMP_ROBOT_MODULES)
+  nanobind_add_stub(
+    "vamp_${robot_name}_stub"
+    MODULE "_core_ext.${robot_name}"
+    OUTPUT "${STUB_PREFIX}${robot_name}.pyi"
+    PYTHON_PATH $<TARGET_FILE_DIR:_core_ext>
+    DEPENDS _core_ext
+    VERBOSE
+  )
+endforeach()
 
 install(
   TARGETS _core_ext
@@ -121,26 +119,30 @@ install(
   DESTINATION vamp/_core
 )
 
-# install(
-#   FILES "${STUB_PREFIX}__init__.pyi"
-#   DESTINATION "${CMAKE_SOURCE_DIR}/src/vamp/_core"
-# )
+install(
+  FILES "${STUB_PREFIX}__init__.pyi"
+  DESTINATION "${CMAKE_SOURCE_DIR}/src/vamp/_core"
+)
 
-# foreach(robot_name IN LISTS VAMP_ROBOT_MODULES)
-#   install(
-#     FILES "${STUB_PREFIX}${robot_name}.pyi"
-#     DESTINATION "${CMAKE_SOURCE_DIR}/src/vamp/_core"
-#   )
-# endforeach()
+foreach(robot_name IN LISTS VAMP_ROBOT_MODULES)
+  install(
+    FILES "${STUB_PREFIX}${robot_name}.pyi"
+    DESTINATION "${CMAKE_SOURCE_DIR}/src/vamp/_core"
+  )
+endforeach()
 
 if(VAMP_BUILD_CPP_DEMO)
   add_executable(vamp_rrtc_example scripts/cpp/rrtc_example.cc)
   target_link_libraries(vamp_rrtc_example PRIVATE Eigen3::Eigen)
   target_include_directories(vamp_rrtc_example SYSTEM PRIVATE ${VAMP_EXT_INCLUDES})
-  
-  add_executable(vamp_mr_planning_test scripts/cpp/test_mr_planning.cpp)
-  target_link_libraries(vamp_mr_planning_test PRIVATE Eigen3::Eigen)
-  target_include_directories(vamp_mr_planning_test SYSTEM PRIVATE ${VAMP_EXT_INCLUDES})
+
+  add_executable(vamp_test_panda_fk scripts/cpp/test_panda_fk.cc)
+  target_link_libraries(vamp_test_panda_fk PRIVATE Eigen3::Eigen)
+  target_include_directories(vamp_test_panda_fk SYSTEM PRIVATE ${VAMP_EXT_INCLUDES})
+
+  add_executable(vamp_benchmark_collision_checks scripts/cpp/benchmark_collision_checks.cc)
+  target_link_libraries(vamp_benchmark_collision_checks PRIVATE Eigen3::Eigen)
+  target_include_directories(vamp_benchmark_collision_checks SYSTEM PRIVATE ${VAMP_EXT_INCLUDES})
 endif()
 
 if(VAMP_BUILD_OMPL_DEMO)

@@ -8,10 +8,10 @@
 #include <vamp/planning/validate.hh>
 #include <vamp/planning/rrtc.hh>
 #include <vamp/planning/simplify.hh>
-#include <vamp/robots/panda.hh>
+#include <vamp/robots/panda_base.hh>
 #include <vamp/random/halton.hh>
 
-using Robot = vamp::robots::Panda;
+using Robot = vamp::robots::PandaBase<200,200,200>;
 static constexpr const std::size_t rake = vamp::FloatVectorWidth;
 using EnvironmentInput = vamp::collision::Environment<float>;
 using EnvironmentVector = vamp::collision::Environment<vamp::FloatVector<rake>>;

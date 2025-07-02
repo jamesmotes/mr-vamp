@@ -34,6 +34,4 @@ cmake.build-type = "Release"
 
 [tool.scikit-build.cmake.define]
 VAMP_LTO = "OFF"
-CMAKE_CXX_STANDARD = "20"
-CMAKE_CXX_STANDARD_REQUIRED = "ON"
 # VAMP_FORCE_CLANG = "ON"

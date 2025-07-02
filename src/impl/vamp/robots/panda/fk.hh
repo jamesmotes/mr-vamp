@@ -101,9 +101,15 @@ namespace vamp::robots::panda
         FloatVector<rake, 59> r;
     };
 
-    template <std::size_t rake>
+    template <std::size_t rake, int base_x100, int base_y100, int base_z100>
     inline void sphere_fk(const ConfigurationBlock<rake> &q, Spheres<rake> &out) noexcept
     {
+
+        // Convert integer template parameters to float (centimeters to meters)
+        float base_x = static_cast<float>(base_x100) / 100.0f;
+        float base_y = static_cast<float>(base_y100) / 100.0f;
+        float base_z = static_cast<float>(base_z100) / 100.0f;
+
         out.r[0] = 0.08;    // (0, 0)
         out.r[1] = 0.06;    // (0, 0)
         out.r[2] = 0.06;    // (0, 0)
@@ -163,17 +169,17 @@ namespace vamp::robots::panda
         out.r[56] = 0.012;  // (0, 0)
         out.r[57] = 0.012;  // (0, 0)
         out.r[58] = 0.012;  // (0, 0)
-        out.x[0] = 0.0;     // (0, 0)
-        out.x[3] = 0.0;     // (0, 0)
-        out.x[4] = 0.0;     // (0, 0)
-        out.y[0] = 0.0;     // (0, 0)
-        out.y[3] = 0.0;     // (0, 0)
-        out.y[4] = 0.0;     // (0, 0)
-        out.z[0] = 0.05;    // (0, 0)
-        out.z[1] = 0.333;   // (0, 0)
-        out.z[2] = 0.333;   // (0, 0)
-        out.z[3] = 0.213;   // (0, 0)
-        out.z[4] = 0.163;   // (0, 0)
+        out.x[0] = base_x + 0.0f;     // (0, 0)
+        out.x[3] = base_x + 0.0f;     // (0, 0)
+        out.x[4] = base_x + 0.0f;     // (0, 0)
+        out.y[0] = base_y + 0.0f;     // (0, 0)
+        out.y[3] = base_y + 0.0f;     // (0, 0)
+        out.y[4] = base_y + 0.0f;     // (0, 0)
+        out.z[0] = base_z + 0.05f;    // (0, 0)
+        out.z[1] = base_z + 0.333f;   // (0, 0)
+        out.z[2] = base_z + 0.333f;   // (0, 0)
+        out.z[3] = base_z + 0.213f;   // (0, 0)
+        out.z[4] = base_z + 0.163f;   // (0, 0)
         auto INPUT_0 = q[0];
         auto DIV_8 = INPUT_0 * 0.5;
         auto SIN_9 = DIV_8.sin();
@@ -181,9 +187,9 @@ namespace vamp::robots::panda
         auto MUL_1570 = COS_15 * SIN_9;
         auto MUL_1589 = MUL_1570 * 2.0;
         auto MUL_1615 = MUL_1589 * 0.08;
-        out.x[1] = MUL_1615;  // (0, 7)
+        out.x[1] = base_x + MUL_1615;  // (0, 7)
         auto MUL_1639 = MUL_1589 * 0.03;
-        out.x[2] = MUL_1639;  // (7, 8)
+        out.x[2] = base_x + MUL_1639;  // (7, 8)
         auto MUL_74 = COS_15 * 0.7071068;
         auto MUL_72 = SIN_9 * 0.7071068;
         auto INPUT_1 = q[1];
@@ -203,17 +209,17 @@ namespace vamp::robots::panda
         auto SUB_1745 = MUL_1706 - MUL_1712;
         auto MUL_1747 = SUB_1745 * 2.0;
         auto MUL_1771 = MUL_1747 * 0.03;
-        out.x[5] = MUL_1771;  // (8, 27)
+        out.x[5] = base_x + MUL_1771;  // (8, 27)
         auto MUL_1790 = MUL_1747 * 0.08;
-        out.x[6] = MUL_1790;  // (27, 28)
+        out.x[6] = base_x + MUL_1790;  // (27, 28)
         auto MUL_1705 = SUB_149 * ADD_144;
         auto MUL_1710 = ADD_130 * SUB_138;
         auto ADD_1730 = MUL_1710 + MUL_1705;
         auto MUL_1733 = ADD_1730 * 2.0;
         auto MUL_1804 = MUL_1733 * 0.12;
-        out.x[7] = MUL_1804;  // (28, 33)
+        out.x[7] = base_x + MUL_1804;  // (28, 33)
         auto MUL_1828 = MUL_1733 * 0.17;
-        out.x[8] = MUL_1828;  // (33, 34)
+        out.x[8] = base_x + MUL_1828;  // (33, 34)
         auto MUL_182 = SUB_149 * 0.7071068;
         auto MUL_198 = ADD_144 * 0.7071068;
         auto MUL_196 = SUB_138 * 0.7071068;
@@ -250,10 +256,10 @@ namespace vamp::robots::panda
         auto MUL_1881 = ADD_1879 * 2.0;
         auto MUL_1906 = MUL_1881 * 0.1;
         auto SUB_1916 = MUL_240 - MUL_1906;
-        out.x[9] = SUB_1916;  // (34, 70)
+        out.x[9] = base_x + SUB_1916;  // (34, 70)
         auto MUL_1933 = MUL_1881 * 0.06;
         auto SUB_1943 = MUL_240 - MUL_1933;
-        out.x[10] = SUB_1943;  // (70, 72)
+        out.x[10] = base_x + SUB_1943;  // (70, 72)
         auto MUL_1846 = SUB_290 * ADD_285;
         auto MUL_1845 = ADD_285 * ADD_285;
         auto MUL_1844 = SUB_279 * SUB_279;
@@ -267,11 +273,11 @@ namespace vamp::robots::panda
         auto MUL_1947 = SUB_1859 * 0.08;
         auto ADD_1964 = MUL_1947 + MUL_1953;
         auto ADD_1967 = MUL_240 + ADD_1964;
-        out.x[11] = ADD_1967;  // (72, 85)
+        out.x[11] = base_x + ADD_1967;  // (72, 85)
         auto MUL_1977 = MUL_1868 * 0.02;
         auto ADD_1988 = MUL_1947 + MUL_1977;
         auto ADD_1991 = MUL_240 + ADD_1988;
-        out.x[12] = ADD_1991;  // (85, 88)
+        out.x[12] = base_x + ADD_1991;  // (85, 88)
         auto MUL_351 = SUB_290 * 0.7071068;
         auto MUL_348 = ADD_285 * 0.7071068;
         auto MUL_345 = SUB_279 * 0.7071068;
@@ -317,21 +323,21 @@ namespace vamp::robots::panda
         auto MUL_2055 = MUL_2018 * 0.095;
         auto SUB_2066 = MUL_2055 - MUL_2044;
         auto ADD_2069 = ADD_403 + SUB_2066;
-        out.x[13] = ADD_2069;  // (88, 133)
+        out.x[13] = base_x + ADD_2069;  // (88, 133)
         auto MUL_1997 = SUB_435 * SUB_424;
         auto MUL_2001 = ADD_418 * ADD_430;
         auto ADD_2029 = MUL_2001 + MUL_1997;
         auto MUL_2031 = ADD_2029 * 2.0;
         auto MUL_2085 = MUL_2031 * 0.02;
         auto ADD_2090 = ADD_403 + MUL_2085;
-        out.x[14] = ADD_2090;  // (133, 139)
+        out.x[14] = base_x + ADD_2090;  // (133, 139)
         auto MUL_2106 = MUL_2031 * 0.06;
         auto ADD_2111 = ADD_403 + MUL_2106;
-        out.x[15] = ADD_2111;  // (139, 141)
+        out.x[15] = base_x + ADD_2111;  // (139, 141)
         auto MUL_2127 = MUL_2018 * 0.06;
         auto SUB_2138 = MUL_2127 - MUL_2044;
         auto ADD_2141 = ADD_403 + SUB_2138;
-        out.x[16] = ADD_2141;  // (141, 144)
+        out.x[16] = base_x + ADD_2141;  // (141, 144)
         auto MUL_501 = SUB_435 * 0.7071068;
         auto MUL_498 = ADD_430 * 0.7071068;
         auto MUL_527 = ADD_430 * 0.0825;
@@ -353,7 +359,7 @@ namespace vamp::robots::panda
         auto MUL_536 = ADD_534 * 2.0;
         auto SUB_539 = MUL_536 - 0.0825;
         auto ADD_564 = ADD_403 + SUB_539;
-        out.x[29] = ADD_564;  // (144, 165)
+        out.x[29] = base_x + ADD_564;  // (144, 165)
         auto INPUT_4 = q[4];
         auto DIV_568 = INPUT_4 * 0.5;
         auto SIN_569 = DIV_568.sin();
@@ -376,22 +382,22 @@ namespace vamp::robots::panda
         auto MUL_2168 = SUB_2166 * 2.0;
         auto MUL_2199 = MUL_2168 * 0.055;
         auto ADD_2210 = ADD_564 + MUL_2199;
-        out.x[17] = ADD_2210;  // (165, 187)
+        out.x[17] = base_x + ADD_2210;  // (165, 187)
         auto MUL_2220 = MUL_2168 * 0.075;
         auto ADD_2231 = ADD_564 + MUL_2220;
-        out.x[18] = ADD_2231;  // (187, 189)
+        out.x[18] = base_x + ADD_2231;  // (187, 189)
         auto MUL_2147 = SUB_596 * SUB_585;
         auto MUL_2151 = ADD_579 * ADD_591;
         auto ADD_2179 = MUL_2151 + MUL_2147;
         auto MUL_2181 = ADD_2179 * 2.0;
         auto MUL_2248 = MUL_2181 * 0.22;
         auto SUB_2258 = ADD_564 - MUL_2248;
-        out.x[19] = SUB_2258;  // (189, 195)
+        out.x[19] = base_x + SUB_2258;  // (189, 195)
         auto MUL_2275 = MUL_2181 * 0.18;
         auto MUL_2268 = MUL_2168 * 0.05;
         auto SUB_2285 = MUL_2268 - MUL_2275;
         auto ADD_2288 = ADD_564 + SUB_2285;
-        out.x[20] = ADD_2288;  // (195, 199)
+        out.x[20] = base_x + ADD_2288;  // (195, 199)
         auto MUL_2298 = MUL_2168 * 0.08;
         auto MUL_2145 = ADD_591 * ADD_591;
         auto MUL_2144 = SUB_585 * SUB_585;
@@ -403,41 +409,41 @@ namespace vamp::robots::panda
         auto ADD_2315 = MUL_2292 + MUL_2298;
         auto SUB_2318 = ADD_2315 - MUL_2305;
         auto ADD_2321 = ADD_564 + SUB_2318;
-        out.x[21] = ADD_2321;  // (199, 210)
+        out.x[21] = base_x + ADD_2321;  // (199, 210)
         auto MUL_2338 = MUL_2181 * 0.11;
         auto MUL_2331 = MUL_2168 * 0.085;
         auto ADD_2348 = MUL_2292 + MUL_2331;
         auto SUB_2351 = ADD_2348 - MUL_2338;
         auto ADD_2354 = ADD_564 + SUB_2351;
-        out.x[22] = ADD_2354;  // (210, 215)
+        out.x[22] = base_x + ADD_2354;  // (210, 215)
         auto MUL_2371 = MUL_2181 * 0.08;
         auto MUL_2364 = MUL_2168 * 0.09;
         auto ADD_2381 = MUL_2292 + MUL_2364;
         auto SUB_2384 = ADD_2381 - MUL_2371;
         auto ADD_2387 = ADD_564 + SUB_2384;
-        out.x[23] = ADD_2387;  // (215, 220)
+        out.x[23] = base_x + ADD_2387;  // (215, 220)
         auto MUL_2404 = MUL_2181 * 0.05;
         auto MUL_2397 = MUL_2168 * 0.095;
         auto ADD_2414 = MUL_2292 + MUL_2397;
         auto SUB_2417 = ADD_2414 - MUL_2404;
         auto ADD_2420 = ADD_564 + SUB_2417;
-        out.x[24] = ADD_2420;  // (220, 225)
+        out.x[24] = base_x + ADD_2420;  // (220, 225)
         auto SUB_2453 = MUL_2298 - MUL_2292;
         auto SUB_2456 = SUB_2453 - MUL_2305;
         auto ADD_2459 = ADD_564 + SUB_2456;
-        out.x[25] = ADD_2459;  // (225, 228)
+        out.x[25] = base_x + ADD_2459;  // (225, 228)
         auto SUB_2492 = MUL_2331 - MUL_2292;
         auto SUB_2495 = SUB_2492 - MUL_2338;
         auto ADD_2498 = ADD_564 + SUB_2495;
-        out.x[26] = ADD_2498;  // (228, 231)
+        out.x[26] = base_x + ADD_2498;  // (228, 231)
         auto SUB_2531 = MUL_2364 - MUL_2292;
         auto SUB_2534 = SUB_2531 - MUL_2371;
         auto ADD_2537 = ADD_564 + SUB_2534;
-        out.x[27] = ADD_2537;  // (231, 234)
+        out.x[27] = base_x + ADD_2537;  // (231, 234)
         auto SUB_2570 = MUL_2397 - MUL_2292;
         auto SUB_2573 = SUB_2570 - MUL_2404;
         auto ADD_2576 = ADD_564 + SUB_2573;
-        out.x[28] = ADD_2576;  // (234, 237)
+        out.x[28] = base_x + ADD_2576;  // (234, 237)
         auto MUL_657 = SUB_596 * 0.7071068;
         auto MUL_654 = ADD_591 * 0.7071068;
         auto MUL_651 = SUB_585 * 0.7071068;
@@ -475,11 +481,11 @@ namespace vamp::robots::panda
         auto MUL_2653 = MUL_2603 * 0.01;
         auto SUB_2669 = MUL_2646 - MUL_2653;
         auto ADD_2672 = ADD_564 + SUB_2669;
-        out.x[30] = ADD_2672;  // (237, 274)
+        out.x[30] = base_x + ADD_2672;  // (237, 274)
         auto MUL_2682 = MUL_2603 * 0.035;
         auto ADD_2693 = MUL_2646 + MUL_2682;
         auto ADD_2696 = ADD_564 + ADD_2693;
-        out.x[31] = ADD_2696;  // (274, 277)
+        out.x[31] = base_x + ADD_2696;  // (274, 277)
         auto MUL_758 = SUB_725 * 0.7071068;
         auto MUL_773 = ADD_720 * 0.7071068;
         auto MUL_771 = SUB_714 * 0.7071068;
@@ -518,7 +524,7 @@ namespace vamp::robots::panda
         auto MUL_2736 = ADD_2734 * 2.0;
         auto MUL_2760 = MUL_2736 * 0.07;
         auto ADD_2765 = ADD_838 + MUL_2760;
-        out.x[32] = ADD_2765;  // (277, 315)
+        out.x[32] = base_x + ADD_2765;  // (277, 315)
         auto MUL_2781 = MUL_2736 * 0.08;
         auto MUL_2701 = SUB_870 * ADD_865;
         auto MUL_2700 = ADD_865 * ADD_865;
@@ -534,24 +540,24 @@ namespace vamp::robots::panda
         auto ADD_2786 = MUL_2769 + MUL_2775;
         auto ADD_2789 = ADD_2786 + MUL_2781;
         auto ADD_2792 = ADD_838 + ADD_2789;
-        out.x[33] = ADD_2792;  // (315, 330)
+        out.x[33] = base_x + ADD_2792;  // (315, 330)
         auto MUL_2802 = MUL_2723 * 0.02;
         auto MUL_2796 = SUB_2714 * 0.04;
         auto ADD_2813 = MUL_2796 + MUL_2802;
         auto ADD_2816 = ADD_2813 + MUL_2781;
         auto ADD_2819 = ADD_838 + ADD_2816;
-        out.x[34] = ADD_2819;  // (330, 335)
+        out.x[34] = base_x + ADD_2819;  // (330, 335)
         auto MUL_2835 = MUL_2736 * 0.085;
         auto MUL_2829 = MUL_2723 * 0.06;
         auto ADD_2840 = MUL_2796 + MUL_2829;
         auto ADD_2843 = ADD_2840 + MUL_2835;
         auto ADD_2846 = ADD_838 + ADD_2843;
-        out.x[35] = ADD_2846;  // (335, 340)
+        out.x[35] = base_x + ADD_2846;  // (335, 340)
         auto MUL_2850 = SUB_2714 * 0.06;
         auto ADD_2867 = MUL_2850 + MUL_2775;
         auto ADD_2870 = ADD_2867 + MUL_2835;
         auto ADD_2873 = ADD_838 + ADD_2870;
-        out.x[36] = ADD_2873;  // (340, 344)
+        out.x[36] = base_x + ADD_2873;  // (340, 344)
         auto MUL_1065 = SUB_870 * 0.9238795;
         auto MUL_1062 = ADD_865 * 0.9238795;
         auto MUL_1049 = SUB_859 * 0.9238795;
@@ -583,62 +589,62 @@ namespace vamp::robots::panda
         auto MUL_947 = ADD_945 * 2.0;
         auto ADD_969 = ADD_838 + MUL_947;
         auto ADD_2999 = ADD_969 + SUB_2996;
-        out.x[37] = ADD_2999;  // (344, 375)
+        out.x[37] = base_x + ADD_2999;  // (344, 375)
         auto MUL_3010 = MUL_2948 * 0.045;
         auto SUB_3026 = MUL_2991 - MUL_3010;
         auto ADD_3029 = ADD_969 + SUB_3026;
-        out.x[38] = ADD_3029;  // (375, 378)
+        out.x[38] = base_x + ADD_3029;  // (375, 378)
         auto MUL_3040 = MUL_2948 * 0.015;
         auto SUB_3056 = MUL_2991 - MUL_3040;
         auto ADD_3059 = ADD_969 + SUB_3056;
-        out.x[39] = ADD_3059;  // (378, 381)
+        out.x[39] = base_x + ADD_3059;  // (378, 381)
         auto ADD_3080 = MUL_3040 + MUL_2991;
         auto ADD_3083 = ADD_969 + ADD_3080;
-        out.x[40] = ADD_3083;  // (381, 383)
+        out.x[40] = base_x + ADD_3083;  // (381, 383)
         auto ADD_3104 = MUL_3010 + MUL_2991;
         auto ADD_3107 = ADD_969 + ADD_3104;
-        out.x[41] = ADD_3107;  // (383, 385)
+        out.x[41] = base_x + ADD_3107;  // (383, 385)
         auto ADD_3128 = MUL_2980 + MUL_2991;
         auto ADD_3131 = ADD_969 + ADD_3128;
-        out.x[42] = ADD_3131;  // (385, 387)
+        out.x[42] = base_x + ADD_3131;  // (385, 387)
         auto MUL_3153 = MUL_2961 * 0.03;
         auto SUB_3158 = MUL_3153 - MUL_2980;
         auto ADD_3161 = ADD_969 + SUB_3158;
-        out.x[43] = ADD_3161;  // (387, 390)
+        out.x[43] = base_x + ADD_3161;  // (387, 390)
         auto SUB_3188 = MUL_3153 - MUL_3010;
         auto ADD_3191 = ADD_969 + SUB_3188;
-        out.x[44] = ADD_3191;  // (390, 392)
+        out.x[44] = base_x + ADD_3191;  // (390, 392)
         auto SUB_3218 = MUL_3153 - MUL_3040;
         auto ADD_3221 = ADD_969 + SUB_3218;
-        out.x[45] = ADD_3221;  // (392, 394)
+        out.x[45] = base_x + ADD_3221;  // (392, 394)
         auto ADD_3242 = MUL_3040 + MUL_3153;
         auto ADD_3245 = ADD_969 + ADD_3242;
-        out.x[46] = ADD_3245;  // (394, 396)
+        out.x[46] = base_x + ADD_3245;  // (394, 396)
         auto ADD_3266 = MUL_3010 + MUL_3153;
         auto ADD_3269 = ADD_969 + ADD_3266;
-        out.x[47] = ADD_3269;  // (396, 398)
+        out.x[47] = base_x + ADD_3269;  // (396, 398)
         auto ADD_3290 = MUL_2980 + MUL_3153;
         auto ADD_3293 = ADD_969 + ADD_3290;
-        out.x[48] = ADD_3293;  // (398, 400)
+        out.x[48] = base_x + ADD_3293;  // (398, 400)
         auto MUL_3315 = MUL_2961 * 0.05;
         auto SUB_3320 = MUL_3315 - MUL_2980;
         auto ADD_3323 = ADD_969 + SUB_3320;
-        out.x[49] = ADD_3323;  // (400, 403)
+        out.x[49] = base_x + ADD_3323;  // (400, 403)
         auto SUB_3350 = MUL_3315 - MUL_3010;
         auto ADD_3353 = ADD_969 + SUB_3350;
-        out.x[50] = ADD_3353;  // (403, 405)
+        out.x[50] = base_x + ADD_3353;  // (403, 405)
         auto SUB_3380 = MUL_3315 - MUL_3040;
         auto ADD_3383 = ADD_969 + SUB_3380;
-        out.x[51] = ADD_3383;  // (405, 407)
+        out.x[51] = base_x + ADD_3383;  // (405, 407)
         auto ADD_3404 = MUL_3040 + MUL_3315;
         auto ADD_3407 = ADD_969 + ADD_3404;
-        out.x[52] = ADD_3407;  // (407, 409)
+        out.x[52] = base_x + ADD_3407;  // (407, 409)
         auto ADD_3428 = MUL_3010 + MUL_3315;
         auto ADD_3431 = ADD_969 + ADD_3428;
-        out.x[53] = ADD_3431;  // (409, 411)
+        out.x[53] = base_x + ADD_3431;  // (409, 411)
         auto ADD_3452 = MUL_2980 + MUL_3315;
         auto ADD_3455 = ADD_969 + ADD_3452;
-        out.x[54] = ADD_3455;  // (411, 413)
+        out.x[54] = base_x + ADD_3455;  // (411, 413)
         auto MUL_3495 = ADD_2959 * 2.0;
         auto MUL_3482 = SUB_2946 * 2.0;
         auto MUL_3513 = MUL_3482 * 0.015;
@@ -657,12 +663,12 @@ namespace vamp::robots::panda
         auto MUL_3519 = MUL_3495 * 0.022;
         auto ADD_3524 = MUL_3513 + MUL_3519;
         auto ADD_3527 = ADD_1235 + ADD_3524;
-        out.x[55] = ADD_3527;  // (413, 431)
+        out.x[55] = base_x + ADD_3527;  // (413, 431)
         auto MUL_3543 = MUL_3495 * 0.044;
         auto MUL_3537 = MUL_3482 * 0.008;
         auto ADD_3548 = MUL_3537 + MUL_3543;
         auto ADD_3551 = ADD_1235 + ADD_3548;
-        out.x[56] = ADD_3551;  // (431, 435)
+        out.x[56] = base_x + ADD_3551;  // (431, 435)
         auto ADD_1331 = MUL_1194 + MUL_1196;
         auto MUL_3591 = ADD_2959 * 2.0;
         auto MUL_3621 = MUL_3591 * 0.022;
@@ -675,29 +681,29 @@ namespace vamp::robots::panda
         auto MUL_1349 = ADD_1347 * 2.0;
         auto ADD_1377 = ADD_969 + MUL_1349;
         auto ADD_3629 = ADD_1377 + SUB_3626;
-        out.x[57] = ADD_3629;  // (435, 447)
+        out.x[57] = base_x + ADD_3629;  // (435, 447)
         auto MUL_3651 = MUL_3591 * 0.044;
         auto MUL_3640 = MUL_3578 * 0.008;
         auto SUB_3656 = MUL_3651 - MUL_3640;
         auto ADD_3659 = ADD_1377 + SUB_3656;
-        out.x[58] = ADD_3659;  // (447, 451)
+        out.x[58] = base_x + ADD_3659;  // (447, 451)
         auto MUL_1569 = SIN_9 * SIN_9;
         auto MUL_1593 = MUL_1569 * 2.0;
         auto SUB_1596 = 1.0 - MUL_1593;
         auto MUL_1618 = SUB_1596 * 0.08;
         auto NEGATE_1619 = -MUL_1618;
-        out.y[1] = NEGATE_1619;  // (451, 456)
+        out.y[1] = base_y + NEGATE_1619;  // (451, 456)
         auto MUL_1642 = SUB_1596 * 0.03;
         auto NEGATE_1643 = -MUL_1642;
-        out.y[2] = NEGATE_1643;  // (456, 458)
+        out.y[2] = base_y + NEGATE_1643;  // (456, 458)
         auto MUL_1708 = SUB_149 * ADD_130;
         auto MUL_1714 = SUB_138 * ADD_144;
         auto ADD_1748 = MUL_1714 + MUL_1708;
         auto MUL_1750 = ADD_1748 * 2.0;
         auto MUL_1773 = MUL_1750 * 0.03;
-        out.y[5] = MUL_1773;  // (458, 463)
+        out.y[5] = base_y + MUL_1773;  // (458, 463)
         auto MUL_1792 = MUL_1750 * 0.08;
-        out.y[6] = MUL_1792;  // (463, 464)
+        out.y[6] = base_y + MUL_1792;  // (463, 464)
         auto MUL_1704 = ADD_144 * ADD_144;
         auto MUL_1707 = ADD_130 * ADD_130;
         auto ADD_1735 = MUL_1704 + MUL_1707;
@@ -705,10 +711,10 @@ namespace vamp::robots::panda
         auto SUB_1741 = 1.0 - MUL_1738;
         auto MUL_1807 = SUB_1741 * 0.12;
         auto NEGATE_1808 = -MUL_1807;
-        out.y[7] = NEGATE_1808;  // (464, 471)
+        out.y[7] = base_y + NEGATE_1808;  // (464, 471)
         auto MUL_1831 = SUB_1741 * 0.17;
         auto NEGATE_1832 = -MUL_1831;
-        out.y[8] = NEGATE_1832;  // (471, 473)
+        out.y[8] = base_y + NEGATE_1832;  // (471, 473)
         auto MUL_1849 = SUB_290 * ADD_273;
         auto MUL_1852 = SUB_279 * ADD_285;
         auto SUB_1882 = MUL_1852 - MUL_1849;
@@ -720,10 +726,10 @@ namespace vamp::robots::panda
         auto MUL_249 = ADD_247 * 2.0;
         auto SUB_252 = MUL_249 - 0.316;
         auto SUB_1917 = SUB_252 - MUL_1910;
-        out.y[9] = SUB_1917;  // (473, 484)
+        out.y[9] = base_y + SUB_1917;  // (473, 484)
         auto MUL_1937 = MUL_1884 * 0.06;
         auto SUB_1944 = SUB_252 - MUL_1937;
-        out.y[10] = SUB_1944;  // (484, 486)
+        out.y[10] = base_y + SUB_1944;  // (484, 486)
         auto ADD_1860 = MUL_1850 + MUL_1846;
         auto MUL_1862 = ADD_1860 * 2.0;
         auto MUL_1949 = MUL_1862 * 0.08;
@@ -734,11 +740,11 @@ namespace vamp::robots::panda
         auto MUL_1955 = SUB_1875 * 0.06;
         auto ADD_1965 = MUL_1949 + MUL_1955;
         auto ADD_1968 = SUB_252 + ADD_1965;
-        out.y[11] = ADD_1968;  // (486, 496)
+        out.y[11] = base_y + ADD_1968;  // (486, 496)
         auto MUL_1979 = SUB_1875 * 0.02;
         auto ADD_1989 = MUL_1949 + MUL_1979;
         auto ADD_1992 = SUB_252 + ADD_1989;
-        out.y[12] = ADD_1992;  // (496, 499)
+        out.y[12] = base_y + ADD_1992;  // (496, 499)
         auto ADD_2010 = MUL_2000 + MUL_1996;
         auto MUL_2012 = ADD_2010 * 2.0;
         auto MUL_2048 = MUL_2012 * 0.08;
@@ -754,21 +760,21 @@ namespace vamp::robots::panda
         auto MUL_392 = ADD_389 * 2.0;
         auto ADD_404 = SUB_252 + MUL_392;
         auto ADD_2070 = ADD_404 + SUB_2067;
-        out.y[13] = ADD_2070;  // (499, 514)
+        out.y[13] = base_y + ADD_2070;  // (499, 514)
         auto MUL_1999 = SUB_435 * ADD_418;
         auto MUL_2002 = SUB_424 * ADD_430;
         auto SUB_2032 = MUL_2002 - MUL_1999;
         auto MUL_2034 = SUB_2032 * 2.0;
         auto MUL_2087 = MUL_2034 * 0.02;
         auto ADD_2091 = ADD_404 + MUL_2087;
-        out.y[14] = ADD_2091;  // (514, 520)
+        out.y[14] = base_y + ADD_2091;  // (514, 520)
         auto MUL_2108 = MUL_2034 * 0.06;
         auto ADD_2112 = ADD_404 + MUL_2108;
-        out.y[15] = ADD_2112;  // (520, 522)
+        out.y[15] = base_y + ADD_2112;  // (520, 522)
         auto MUL_2129 = SUB_2025 * 0.06;
         auto SUB_2139 = MUL_2129 - MUL_2048;
         auto ADD_2142 = ADD_404 + SUB_2139;
-        out.y[16] = ADD_2142;  // (522, 525)
+        out.y[16] = base_y + ADD_2142;  // (522, 525)
         auto MUL_2148 = ADD_579 * ADD_579;
         auto ADD_2169 = MUL_2145 + MUL_2148;
         auto MUL_2172 = ADD_2169 * 2.0;
@@ -782,24 +788,24 @@ namespace vamp::robots::panda
         auto MUL_551 = ADD_548 * 2.0;
         auto SUB_554 = 0.384 - MUL_551;
         auto ADD_565 = ADD_404 + SUB_554;
-        out.y[29] = ADD_565;  // (525, 538)
+        out.y[29] = base_y + ADD_565;  // (525, 538)
         auto ADD_2211 = ADD_565 + MUL_2201;
-        out.y[17] = ADD_2211;  // (538, 539)
+        out.y[17] = base_y + ADD_2211;  // (538, 539)
         auto MUL_2222 = SUB_2175 * 0.075;
         auto ADD_2232 = ADD_565 + MUL_2222;
-        out.y[18] = ADD_2232;  // (539, 541)
+        out.y[18] = base_y + ADD_2232;  // (539, 541)
         auto MUL_2149 = SUB_596 * ADD_579;
         auto MUL_2152 = SUB_585 * ADD_591;
         auto SUB_2182 = MUL_2152 - MUL_2149;
         auto MUL_2184 = SUB_2182 * 2.0;
         auto MUL_2252 = MUL_2184 * 0.22;
         auto SUB_2259 = ADD_565 - MUL_2252;
-        out.y[19] = SUB_2259;  // (541, 547)
+        out.y[19] = base_y + SUB_2259;  // (541, 547)
         auto MUL_2279 = MUL_2184 * 0.18;
         auto MUL_2270 = SUB_2175 * 0.05;
         auto SUB_2286 = MUL_2270 - MUL_2279;
         auto ADD_2289 = ADD_565 + SUB_2286;
-        out.y[20] = ADD_2289;  // (547, 551)
+        out.y[20] = base_y + ADD_2289;  // (547, 551)
         auto ADD_2160 = MUL_2150 + MUL_2146;
         auto MUL_2309 = MUL_2184 * 0.14;
         auto MUL_2300 = SUB_2175 * 0.08;
@@ -808,41 +814,41 @@ namespace vamp::robots::panda
         auto ADD_2316 = MUL_2294 + MUL_2300;
         auto SUB_2319 = ADD_2316 - MUL_2309;
         auto ADD_2322 = ADD_565 + SUB_2319;
-        out.y[21] = ADD_2322;  // (551, 559)
+        out.y[21] = base_y + ADD_2322;  // (551, 559)
         auto MUL_2342 = MUL_2184 * 0.11;
         auto MUL_2333 = SUB_2175 * 0.085;
         auto ADD_2349 = MUL_2294 + MUL_2333;
         auto SUB_2352 = ADD_2349 - MUL_2342;
         auto ADD_2355 = ADD_565 + SUB_2352;
-        out.y[22] = ADD_2355;  // (559, 564)
+        out.y[22] = base_y + ADD_2355;  // (559, 564)
         auto MUL_2375 = MUL_2184 * 0.08;
         auto MUL_2366 = SUB_2175 * 0.09;
         auto ADD_2382 = MUL_2294 + MUL_2366;
         auto SUB_2385 = ADD_2382 - MUL_2375;
         auto ADD_2388 = ADD_565 + SUB_2385;
-        out.y[23] = ADD_2388;  // (564, 569)
+        out.y[23] = base_y + ADD_2388;  // (564, 569)
         auto MUL_2408 = MUL_2184 * 0.05;
         auto MUL_2399 = SUB_2175 * 0.095;
         auto ADD_2415 = MUL_2294 + MUL_2399;
         auto SUB_2418 = ADD_2415 - MUL_2408;
         auto ADD_2421 = ADD_565 + SUB_2418;
-        out.y[24] = ADD_2421;  // (569, 574)
+        out.y[24] = base_y + ADD_2421;  // (569, 574)
         auto SUB_2454 = MUL_2300 - MUL_2294;
         auto SUB_2457 = SUB_2454 - MUL_2309;
         auto ADD_2460 = ADD_565 + SUB_2457;
-        out.y[25] = ADD_2460;  // (574, 577)
+        out.y[25] = base_y + ADD_2460;  // (574, 577)
         auto SUB_2493 = MUL_2333 - MUL_2294;
         auto SUB_2496 = SUB_2493 - MUL_2342;
         auto ADD_2499 = ADD_565 + SUB_2496;
-        out.y[26] = ADD_2499;  // (577, 580)
+        out.y[26] = base_y + ADD_2499;  // (577, 580)
         auto SUB_2532 = MUL_2366 - MUL_2294;
         auto SUB_2535 = SUB_2532 - MUL_2375;
         auto ADD_2538 = ADD_565 + SUB_2535;
-        out.y[27] = ADD_2538;  // (580, 583)
+        out.y[27] = base_y + ADD_2538;  // (580, 583)
         auto SUB_2571 = MUL_2399 - MUL_2294;
         auto SUB_2574 = SUB_2571 - MUL_2408;
         auto ADD_2577 = ADD_565 + SUB_2574;
-        out.y[28] = ADD_2577;  // (583, 586)
+        out.y[28] = base_y + ADD_2577;  // (583, 586)
         auto ADD_2595 = MUL_2585 + MUL_2581;
         auto MUL_2597 = ADD_2595 * 2.0;
         auto MUL_2648 = MUL_2597 * 0.08;
@@ -853,11 +859,11 @@ namespace vamp::robots::panda
         auto MUL_2657 = SUB_2610 * 0.01;
         auto SUB_2670 = MUL_2648 - MUL_2657;
         auto ADD_2673 = ADD_565 + SUB_2670;
-        out.y[30] = ADD_2673;  // (586, 596)
+        out.y[30] = base_y + ADD_2673;  // (586, 596)
         auto MUL_2684 = SUB_2610 * 0.035;
         auto ADD_2694 = MUL_2648 + MUL_2684;
         auto ADD_2697 = ADD_565 + ADD_2694;
-        out.y[31] = ADD_2697;  // (596, 599)
+        out.y[31] = base_y + ADD_2697;  // (596, 599)
         auto MUL_2704 = SUB_870 * ADD_853;
         auto MUL_2707 = SUB_859 * ADD_865;
         auto SUB_2737 = MUL_2707 - MUL_2704;
@@ -869,7 +875,7 @@ namespace vamp::robots::panda
         auto MUL_827 = ADD_824 * 2.0;
         auto ADD_839 = ADD_565 + MUL_827;
         auto ADD_2766 = ADD_839 + MUL_2762;
-        out.y[32] = ADD_2766;  // (599, 610)
+        out.y[32] = base_y + ADD_2766;  // (599, 610)
         auto ADD_2715 = MUL_2705 + MUL_2701;
         auto MUL_2783 = MUL_2739 * 0.08;
         auto MUL_2717 = ADD_2715 * 2.0;
@@ -882,24 +888,24 @@ namespace vamp::robots::panda
         auto ADD_2787 = MUL_2771 + MUL_2777;
         auto ADD_2790 = ADD_2787 + MUL_2783;
         auto ADD_2793 = ADD_839 + ADD_2790;
-        out.y[33] = ADD_2793;  // (610, 622)
+        out.y[33] = base_y + ADD_2793;  // (610, 622)
         auto MUL_2804 = SUB_2730 * 0.02;
         auto MUL_2798 = MUL_2717 * 0.04;
         auto ADD_2814 = MUL_2798 + MUL_2804;
         auto ADD_2817 = ADD_2814 + MUL_2783;
         auto ADD_2820 = ADD_839 + ADD_2817;
-        out.y[34] = ADD_2820;  // (622, 627)
+        out.y[34] = base_y + ADD_2820;  // (622, 627)
         auto MUL_2837 = MUL_2739 * 0.085;
         auto MUL_2831 = SUB_2730 * 0.06;
         auto ADD_2841 = MUL_2798 + MUL_2831;
         auto ADD_2844 = ADD_2841 + MUL_2837;
         auto ADD_2847 = ADD_839 + ADD_2844;
-        out.y[35] = ADD_2847;  // (627, 632)
+        out.y[35] = base_y + ADD_2847;  // (627, 632)
         auto MUL_2852 = MUL_2717 * 0.06;
         auto ADD_2868 = MUL_2852 + MUL_2777;
         auto ADD_2871 = ADD_2868 + MUL_2837;
         auto ADD_2874 = ADD_839 + ADD_2871;
-        out.y[36] = ADD_2874;  // (632, 636)
+        out.y[36] = base_y + ADD_2874;  // (632, 636)
         auto MUL_2929 = ADD_1074 * SUB_1039;
         auto MUL_2925 = SUB_1063 * SUB_1063;
         auto MUL_2928 = SUB_1039 * SUB_1039;
@@ -918,62 +924,62 @@ namespace vamp::robots::panda
         auto MUL_956 = SUB_954 * 2.0;
         auto ADD_970 = ADD_839 + MUL_956;
         auto ADD_3000 = ADD_970 + SUB_2997;
-        out.y[37] = ADD_3000;  // (636, 654)
+        out.y[37] = base_y + ADD_3000;  // (636, 654)
         auto MUL_3014 = SUB_2955 * 0.045;
         auto SUB_3027 = MUL_2993 - MUL_3014;
         auto ADD_3030 = ADD_970 + SUB_3027;
-        out.y[38] = ADD_3030;  // (654, 657)
+        out.y[38] = base_y + ADD_3030;  // (654, 657)
         auto MUL_3044 = SUB_2955 * 0.015;
         auto SUB_3057 = MUL_2993 - MUL_3044;
         auto ADD_3060 = ADD_970 + SUB_3057;
-        out.y[39] = ADD_3060;  // (657, 660)
+        out.y[39] = base_y + ADD_3060;  // (657, 660)
         auto ADD_3081 = MUL_3044 + MUL_2993;
         auto ADD_3084 = ADD_970 + ADD_3081;
-        out.y[40] = ADD_3084;  // (660, 662)
+        out.y[40] = base_y + ADD_3084;  // (660, 662)
         auto ADD_3105 = MUL_3014 + MUL_2993;
         auto ADD_3108 = ADD_970 + ADD_3105;
-        out.y[41] = ADD_3108;  // (662, 664)
+        out.y[41] = base_y + ADD_3108;  // (662, 664)
         auto ADD_3129 = MUL_2984 + MUL_2993;
         auto ADD_3132 = ADD_970 + ADD_3129;
-        out.y[42] = ADD_3132;  // (664, 666)
+        out.y[42] = base_y + ADD_3132;  // (664, 666)
         auto MUL_3155 = MUL_2964 * 0.03;
         auto SUB_3159 = MUL_3155 - MUL_2984;
         auto ADD_3162 = ADD_970 + SUB_3159;
-        out.y[43] = ADD_3162;  // (666, 669)
+        out.y[43] = base_y + ADD_3162;  // (666, 669)
         auto SUB_3189 = MUL_3155 - MUL_3014;
         auto ADD_3192 = ADD_970 + SUB_3189;
-        out.y[44] = ADD_3192;  // (669, 671)
+        out.y[44] = base_y + ADD_3192;  // (669, 671)
         auto SUB_3219 = MUL_3155 - MUL_3044;
         auto ADD_3222 = ADD_970 + SUB_3219;
-        out.y[45] = ADD_3222;  // (671, 673)
+        out.y[45] = base_y + ADD_3222;  // (671, 673)
         auto ADD_3243 = MUL_3044 + MUL_3155;
         auto ADD_3246 = ADD_970 + ADD_3243;
-        out.y[46] = ADD_3246;  // (673, 675)
+        out.y[46] = base_y + ADD_3246;  // (673, 675)
         auto ADD_3267 = MUL_3014 + MUL_3155;
         auto ADD_3270 = ADD_970 + ADD_3267;
-        out.y[47] = ADD_3270;  // (675, 677)
+        out.y[47] = base_y + ADD_3270;  // (675, 677)
         auto ADD_3291 = MUL_2984 + MUL_3155;
         auto ADD_3294 = ADD_970 + ADD_3291;
-        out.y[48] = ADD_3294;  // (677, 679)
+        out.y[48] = base_y + ADD_3294;  // (677, 679)
         auto MUL_3317 = MUL_2964 * 0.05;
         auto SUB_3321 = MUL_3317 - MUL_2984;
         auto ADD_3324 = ADD_970 + SUB_3321;
-        out.y[49] = ADD_3324;  // (679, 682)
+        out.y[49] = base_y + ADD_3324;  // (679, 682)
         auto SUB_3351 = MUL_3317 - MUL_3014;
         auto ADD_3354 = ADD_970 + SUB_3351;
-        out.y[50] = ADD_3354;  // (682, 684)
+        out.y[50] = base_y + ADD_3354;  // (682, 684)
         auto SUB_3381 = MUL_3317 - MUL_3044;
         auto ADD_3384 = ADD_970 + SUB_3381;
-        out.y[51] = ADD_3384;  // (684, 686)
+        out.y[51] = base_y + ADD_3384;  // (684, 686)
         auto ADD_3405 = MUL_3044 + MUL_3317;
         auto ADD_3408 = ADD_970 + ADD_3405;
-        out.y[52] = ADD_3408;  // (686, 688)
+        out.y[52] = base_y + ADD_3408;  // (686, 688)
         auto ADD_3429 = MUL_3014 + MUL_3317;
         auto ADD_3432 = ADD_970 + ADD_3429;
-        out.y[53] = ADD_3432;  // (688, 690)
+        out.y[53] = base_y + ADD_3432;  // (688, 690)
         auto ADD_3453 = MUL_2984 + MUL_3317;
         auto ADD_3456 = ADD_970 + ADD_3453;
-        out.y[54] = ADD_3456;  // (690, 692)
+        out.y[54] = base_y + ADD_3456;  // (690, 692)
         auto MUL_3498 = SUB_2962 * 2.0;
         auto MUL_3521 = MUL_3498 * 0.022;
         auto MUL_3486 = ADD_2949 * 2.0;
@@ -989,12 +995,12 @@ namespace vamp::robots::panda
         auto ADD_1225 = MUL_1223 + 0.065;
         auto ADD_1236 = ADD_970 + ADD_1225;
         auto ADD_3528 = ADD_1236 + ADD_3525;
-        out.y[55] = ADD_3528;  // (692, 707)
+        out.y[55] = base_y + ADD_3528;  // (692, 707)
         auto MUL_3545 = MUL_3498 * 0.044;
         auto MUL_3539 = SUB_3489 * 0.008;
         auto ADD_3549 = MUL_3539 + MUL_3545;
         auto ADD_3552 = ADD_1236 + ADD_3549;
-        out.y[56] = ADD_3552;  // (707, 711)
+        out.y[56] = base_y + ADD_3552;  // (707, 711)
         auto SUB_1356 = MUL_1217 - MUL_1215;
         auto MUL_3594 = SUB_2962 * 2.0;
         auto MUL_3623 = MUL_3594 * 0.022;
@@ -1008,30 +1014,30 @@ namespace vamp::robots::panda
         auto SUB_1363 = MUL_1360 - 0.065;
         auto ADD_1378 = ADD_970 + SUB_1363;
         auto ADD_3630 = ADD_1378 + SUB_3627;
-        out.y[57] = ADD_3630;  // (711, 724)
+        out.y[57] = base_y + ADD_3630;  // (711, 724)
         auto MUL_3653 = MUL_3594 * 0.044;
         auto MUL_3644 = SUB_3585 * 0.008;
         auto SUB_3657 = MUL_3653 - MUL_3644;
         auto ADD_3660 = ADD_1378 + SUB_3657;
-        out.y[58] = ADD_3660;  // (724, 728)
+        out.y[58] = base_y + ADD_3660;  // (724, 728)
         auto MUL_1703 = SUB_138 * SUB_138;
         auto ADD_1751 = MUL_1703 + MUL_1707;
         auto MUL_1754 = ADD_1751 * 2.0;
         auto SUB_1757 = 1.0 - MUL_1754;
         auto MUL_1775 = SUB_1757 * 0.03;
         auto ADD_1776 = 0.333 + MUL_1775;
-        out.z[5] = ADD_1776;  // (728, 734)
+        out.z[5] = base_z + ADD_1776;  // (728, 734)
         auto MUL_1794 = SUB_1757 * 0.08;
         auto ADD_1795 = 0.333 + MUL_1794;
-        out.z[6] = ADD_1795;  // (734, 736)
+        out.z[6] = base_z + ADD_1795;  // (734, 736)
         auto SUB_1742 = MUL_1714 - MUL_1708;
         auto MUL_1744 = SUB_1742 * 2.0;
         auto MUL_1811 = MUL_1744 * 0.12;
         auto SUB_1819 = 0.333 - MUL_1811;
-        out.z[7] = SUB_1819;  // (736, 740)
+        out.z[7] = base_z + SUB_1819;  // (736, 740)
         auto MUL_1835 = MUL_1744 * 0.17;
         auto SUB_1843 = 0.333 - MUL_1835;
-        out.z[8] = SUB_1843;  // (740, 742)
+        out.z[8] = base_z + SUB_1843;  // (740, 742)
         auto ADD_1885 = MUL_1844 + MUL_1848;
         auto MUL_1888 = ADD_1885 * 2.0;
         auto SUB_1891 = 1.0 - MUL_1888;
@@ -1042,10 +1048,10 @@ namespace vamp::robots::panda
         auto MUL_258 = SUB_256 * 2.0;
         auto ADD_260 = 0.333 + MUL_258;
         auto SUB_1918 = ADD_260 - MUL_1914;
-        out.z[9] = SUB_1918;  // (742, 752)
+        out.z[9] = base_z + SUB_1918;  // (742, 752)
         auto MUL_1941 = SUB_1891 * 0.06;
         auto SUB_1945 = ADD_260 - MUL_1941;
-        out.z[10] = SUB_1945;  // (752, 754)
+        out.z[10] = base_z + SUB_1945;  // (752, 754)
         auto SUB_1863 = MUL_1851 - MUL_1847;
         auto ADD_1876 = MUL_1852 + MUL_1849;
         auto MUL_1878 = ADD_1876 * 2.0;
@@ -1054,11 +1060,11 @@ namespace vamp::robots::panda
         auto MUL_1951 = MUL_1865 * 0.08;
         auto ADD_1966 = MUL_1951 + MUL_1957;
         auto ADD_1969 = ADD_260 + ADD_1966;
-        out.z[11] = ADD_1969;  // (754, 762)
+        out.z[11] = base_z + ADD_1969;  // (754, 762)
         auto MUL_1981 = MUL_1878 * 0.02;
         auto ADD_1990 = MUL_1951 + MUL_1981;
         auto ADD_1993 = ADD_260 + ADD_1990;
-        out.z[12] = ADD_1993;  // (762, 765)
+        out.z[12] = base_z + ADD_1993;  // (762, 765)
         auto SUB_2013 = MUL_2001 - MUL_1997;
         auto ADD_2026 = MUL_2002 + MUL_1999;
         auto MUL_2028 = ADD_2026 * 2.0;
@@ -1072,20 +1078,20 @@ namespace vamp::robots::panda
         auto MUL_401 = SUB_398 * 2.0;
         auto ADD_405 = ADD_260 + MUL_401;
         auto ADD_2071 = ADD_405 + SUB_2068;
-        out.z[13] = ADD_2071;  // (765, 778)
+        out.z[13] = base_z + ADD_2071;  // (765, 778)
         auto ADD_2035 = MUL_1994 + MUL_1998;
         auto MUL_2038 = ADD_2035 * 2.0;
         auto SUB_2041 = 1.0 - MUL_2038;
         auto MUL_2089 = SUB_2041 * 0.02;
         auto ADD_2092 = ADD_405 + MUL_2089;
-        out.z[14] = ADD_2092;  // (778, 783)
+        out.z[14] = base_z + ADD_2092;  // (778, 783)
         auto MUL_2110 = SUB_2041 * 0.06;
         auto ADD_2113 = ADD_405 + MUL_2110;
-        out.z[15] = ADD_2113;  // (783, 785)
+        out.z[15] = base_z + ADD_2113;  // (783, 785)
         auto MUL_2131 = MUL_2028 * 0.06;
         auto SUB_2140 = MUL_2131 - MUL_2052;
         auto ADD_2143 = ADD_405 + SUB_2140;
-        out.z[16] = ADD_2143;  // (785, 788)
+        out.z[16] = base_z + ADD_2143;  // (785, 788)
         auto ADD_2176 = MUL_2152 + MUL_2149;
         auto MUL_2178 = ADD_2176 * 2.0;
         auto MUL_2203 = MUL_2178 * 0.055;
@@ -1096,23 +1102,23 @@ namespace vamp::robots::panda
         auto ADD_560 = SUB_557 + MUL_558;
         auto MUL_562 = ADD_560 * 2.0;
         auto ADD_566 = ADD_405 + MUL_562;
-        out.z[29] = ADD_566;  // (788, 798)
+        out.z[29] = base_z + ADD_566;  // (788, 798)
         auto ADD_2212 = ADD_566 + MUL_2203;
-        out.z[17] = ADD_2212;  // (798, 799)
+        out.z[17] = base_z + ADD_2212;  // (798, 799)
         auto MUL_2224 = MUL_2178 * 0.075;
         auto ADD_2233 = ADD_566 + MUL_2224;
-        out.z[18] = ADD_2233;  // (799, 801)
+        out.z[18] = base_z + ADD_2233;  // (799, 801)
         auto ADD_2185 = MUL_2144 + MUL_2148;
         auto MUL_2188 = ADD_2185 * 2.0;
         auto SUB_2191 = 1.0 - MUL_2188;
         auto MUL_2256 = SUB_2191 * 0.22;
         auto SUB_2260 = ADD_566 - MUL_2256;
-        out.z[19] = SUB_2260;  // (801, 806)
+        out.z[19] = base_z + SUB_2260;  // (801, 806)
         auto MUL_2283 = SUB_2191 * 0.18;
         auto MUL_2272 = MUL_2178 * 0.05;
         auto SUB_2287 = MUL_2272 - MUL_2283;
         auto ADD_2290 = ADD_566 + SUB_2287;
-        out.z[20] = ADD_2290;  // (806, 810)
+        out.z[20] = base_z + ADD_2290;  // (806, 810)
         auto SUB_2163 = MUL_2151 - MUL_2147;
         auto MUL_2313 = SUB_2191 * 0.14;
         auto MUL_2302 = MUL_2178 * 0.08;
@@ -1121,41 +1127,41 @@ namespace vamp::robots::panda
         auto ADD_2317 = MUL_2296 + MUL_2302;
         auto SUB_2320 = ADD_2317 - MUL_2313;
         auto ADD_2323 = ADD_566 + SUB_2320;
-        out.z[21] = ADD_2323;  // (810, 818)
+        out.z[21] = base_z + ADD_2323;  // (810, 818)
         auto MUL_2346 = SUB_2191 * 0.11;
         auto MUL_2335 = MUL_2178 * 0.085;
         auto ADD_2350 = MUL_2296 + MUL_2335;
         auto SUB_2353 = ADD_2350 - MUL_2346;
         auto ADD_2356 = ADD_566 + SUB_2353;
-        out.z[22] = ADD_2356;  // (818, 823)
+        out.z[22] = base_z + ADD_2356;  // (818, 823)
         auto MUL_2379 = SUB_2191 * 0.08;
         auto MUL_2368 = MUL_2178 * 0.09;
         auto ADD_2383 = MUL_2296 + MUL_2368;
         auto SUB_2386 = ADD_2383 - MUL_2379;
         auto ADD_2389 = ADD_566 + SUB_2386;
-        out.z[23] = ADD_2389;  // (823, 828)
+        out.z[23] = base_z + ADD_2389;  // (823, 828)
         auto MUL_2412 = SUB_2191 * 0.05;
         auto MUL_2401 = MUL_2178 * 0.095;
         auto ADD_2416 = MUL_2296 + MUL_2401;
         auto SUB_2419 = ADD_2416 - MUL_2412;
         auto ADD_2422 = ADD_566 + SUB_2419;
-        out.z[24] = ADD_2422;  // (828, 833)
+        out.z[24] = base_z + ADD_2422;  // (828, 833)
         auto SUB_2455 = MUL_2302 - MUL_2296;
         auto SUB_2458 = SUB_2455 - MUL_2313;
         auto ADD_2461 = ADD_566 + SUB_2458;
-        out.z[25] = ADD_2461;  // (833, 836)
+        out.z[25] = base_z + ADD_2461;  // (833, 836)
         auto SUB_2494 = MUL_2335 - MUL_2296;
         auto SUB_2497 = SUB_2494 - MUL_2346;
         auto ADD_2500 = ADD_566 + SUB_2497;
-        out.z[26] = ADD_2500;  // (836, 839)
+        out.z[26] = base_z + ADD_2500;  // (836, 839)
         auto SUB_2533 = MUL_2368 - MUL_2296;
         auto SUB_2536 = SUB_2533 - MUL_2379;
         auto ADD_2539 = ADD_566 + SUB_2536;
-        out.z[27] = ADD_2539;  // (839, 842)
+        out.z[27] = base_z + ADD_2539;  // (839, 842)
         auto SUB_2572 = MUL_2401 - MUL_2296;
         auto SUB_2575 = SUB_2572 - MUL_2412;
         auto ADD_2578 = ADD_566 + SUB_2575;
-        out.z[28] = ADD_2578;  // (842, 845)
+        out.z[28] = base_z + ADD_2578;  // (842, 845)
         auto MUL_2582 = SUB_725 * SUB_714;
         auto MUL_2584 = SUB_725 * ADD_708;
         auto MUL_2587 = SUB_714 * ADD_720;
@@ -1168,11 +1174,11 @@ namespace vamp::robots::panda
         auto MUL_2650 = MUL_2600 * 0.08;
         auto SUB_2671 = MUL_2650 - MUL_2661;
         auto ADD_2674 = ADD_566 + SUB_2671;
-        out.z[30] = ADD_2674;  // (845, 857)
+        out.z[30] = base_z + ADD_2674;  // (845, 857)
         auto MUL_2686 = MUL_2613 * 0.035;
         auto ADD_2695 = MUL_2650 + MUL_2686;
         auto ADD_2698 = ADD_566 + ADD_2695;
-        out.z[31] = ADD_2698;  // (857, 860)
+        out.z[31] = base_z + ADD_2698;  // (857, 860)
         auto ADD_2740 = MUL_2699 + MUL_2703;
         auto MUL_2743 = ADD_2740 * 2.0;
         auto SUB_2746 = 1.0 - MUL_2743;
@@ -1183,7 +1189,7 @@ namespace vamp::robots::panda
         auto MUL_836 = SUB_833 * 2.0;
         auto ADD_840 = ADD_566 + MUL_836;
         auto ADD_2767 = ADD_840 + MUL_2764;
-        out.z[32] = ADD_2767;  // (860, 870)
+        out.z[32] = base_z + ADD_2767;  // (860, 870)
         auto SUB_2718 = MUL_2706 - MUL_2702;
         auto ADD_2731 = MUL_2707 + MUL_2704;
         auto MUL_2785 = SUB_2746 * 0.08;
@@ -1194,24 +1200,24 @@ namespace vamp::robots::panda
         auto ADD_2788 = MUL_2773 + MUL_2779;
         auto ADD_2791 = ADD_2788 + MUL_2785;
         auto ADD_2794 = ADD_840 + ADD_2791;
-        out.z[33] = ADD_2794;  // (870, 880)
+        out.z[33] = base_z + ADD_2794;  // (870, 880)
         auto MUL_2806 = MUL_2733 * 0.02;
         auto MUL_2800 = MUL_2720 * 0.04;
         auto ADD_2815 = MUL_2800 + MUL_2806;
         auto ADD_2818 = ADD_2815 + MUL_2785;
         auto ADD_2821 = ADD_840 + ADD_2818;
-        out.z[34] = ADD_2821;  // (880, 885)
+        out.z[34] = base_z + ADD_2821;  // (880, 885)
         auto MUL_2839 = SUB_2746 * 0.085;
         auto MUL_2833 = MUL_2733 * 0.06;
         auto ADD_2842 = MUL_2800 + MUL_2833;
         auto ADD_2845 = ADD_2842 + MUL_2839;
         auto ADD_2848 = ADD_840 + ADD_2845;
-        out.z[35] = ADD_2848;  // (885, 890)
+        out.z[35] = base_z + ADD_2848;  // (885, 890)
         auto MUL_2854 = MUL_2720 * 0.06;
         auto ADD_2869 = MUL_2854 + MUL_2779;
         auto ADD_2872 = ADD_2869 + MUL_2839;
         auto ADD_2875 = ADD_840 + ADD_2872;
-        out.z[36] = ADD_2875;  // (890, 894)
+        out.z[36] = base_z + ADD_2875;  // (890, 894)
         auto ADD_2956 = MUL_2932 + MUL_2929;
         auto MUL_2958 = ADD_2956 * 2.0;
         auto MUL_2988 = MUL_2958 * 0.075;
@@ -1228,62 +1234,62 @@ namespace vamp::robots::panda
         auto SUB_968 = 0.107 - MUL_965;
         auto ADD_971 = ADD_840 + SUB_968;
         auto ADD_3001 = ADD_971 + SUB_2998;
-        out.z[37] = ADD_3001;  // (894, 910)
+        out.z[37] = base_z + ADD_3001;  // (894, 910)
         auto MUL_3018 = MUL_2958 * 0.045;
         auto SUB_3028 = MUL_2995 - MUL_3018;
         auto ADD_3031 = ADD_971 + SUB_3028;
-        out.z[38] = ADD_3031;  // (910, 913)
+        out.z[38] = base_z + ADD_3031;  // (910, 913)
         auto MUL_3048 = MUL_2958 * 0.015;
         auto SUB_3058 = MUL_2995 - MUL_3048;
         auto ADD_3061 = ADD_971 + SUB_3058;
-        out.z[39] = ADD_3061;  // (913, 916)
+        out.z[39] = base_z + ADD_3061;  // (913, 916)
         auto ADD_3082 = MUL_3048 + MUL_2995;
         auto ADD_3085 = ADD_971 + ADD_3082;
-        out.z[40] = ADD_3085;  // (916, 918)
+        out.z[40] = base_z + ADD_3085;  // (916, 918)
         auto ADD_3106 = MUL_3018 + MUL_2995;
         auto ADD_3109 = ADD_971 + ADD_3106;
-        out.z[41] = ADD_3109;  // (918, 920)
+        out.z[41] = base_z + ADD_3109;  // (918, 920)
         auto ADD_3130 = MUL_2988 + MUL_2995;
         auto ADD_3133 = ADD_971 + ADD_3130;
-        out.z[42] = ADD_3133;  // (920, 922)
+        out.z[42] = base_z + ADD_3133;  // (920, 922)
         auto MUL_3157 = SUB_2971 * 0.03;
         auto SUB_3160 = MUL_3157 - MUL_2988;
         auto ADD_3163 = ADD_971 + SUB_3160;
-        out.z[43] = ADD_3163;  // (922, 925)
+        out.z[43] = base_z + ADD_3163;  // (922, 925)
         auto SUB_3190 = MUL_3157 - MUL_3018;
         auto ADD_3193 = ADD_971 + SUB_3190;
-        out.z[44] = ADD_3193;  // (925, 927)
+        out.z[44] = base_z + ADD_3193;  // (925, 927)
         auto SUB_3220 = MUL_3157 - MUL_3048;
         auto ADD_3223 = ADD_971 + SUB_3220;
-        out.z[45] = ADD_3223;  // (927, 929)
+        out.z[45] = base_z + ADD_3223;  // (927, 929)
         auto ADD_3244 = MUL_3048 + MUL_3157;
         auto ADD_3247 = ADD_971 + ADD_3244;
-        out.z[46] = ADD_3247;  // (929, 931)
+        out.z[46] = base_z + ADD_3247;  // (929, 931)
         auto ADD_3268 = MUL_3018 + MUL_3157;
         auto ADD_3271 = ADD_971 + ADD_3268;
-        out.z[47] = ADD_3271;  // (931, 933)
+        out.z[47] = base_z + ADD_3271;  // (931, 933)
         auto ADD_3292 = MUL_2988 + MUL_3157;
         auto ADD_3295 = ADD_971 + ADD_3292;
-        out.z[48] = ADD_3295;  // (933, 935)
+        out.z[48] = base_z + ADD_3295;  // (933, 935)
         auto MUL_3319 = SUB_2971 * 0.05;
         auto SUB_3322 = MUL_3319 - MUL_2988;
         auto ADD_3325 = ADD_971 + SUB_3322;
-        out.z[49] = ADD_3325;  // (935, 938)
+        out.z[49] = base_z + ADD_3325;  // (935, 938)
         auto SUB_3352 = MUL_3319 - MUL_3018;
         auto ADD_3355 = ADD_971 + SUB_3352;
-        out.z[50] = ADD_3355;  // (938, 940)
+        out.z[50] = base_z + ADD_3355;  // (938, 940)
         auto SUB_3382 = MUL_3319 - MUL_3048;
         auto ADD_3385 = ADD_971 + SUB_3382;
-        out.z[51] = ADD_3385;  // (940, 942)
+        out.z[51] = base_z + ADD_3385;  // (940, 942)
         auto ADD_3406 = MUL_3048 + MUL_3319;
         auto ADD_3409 = ADD_971 + ADD_3406;
-        out.z[52] = ADD_3409;  // (942, 944)
+        out.z[52] = base_z + ADD_3409;  // (942, 944)
         auto ADD_3430 = MUL_3018 + MUL_3319;
         auto ADD_3433 = ADD_971 + ADD_3430;
-        out.z[53] = ADD_3433;  // (944, 946)
+        out.z[53] = base_z + ADD_3433;  // (944, 946)
         auto ADD_3454 = MUL_2988 + MUL_3319;
         auto ADD_3457 = ADD_971 + ADD_3454;
-        out.z[54] = ADD_3457;  // (946, 948)
+        out.z[54] = base_z + ADD_3457;  // (946, 948)
         auto MUL_3502 = ADD_2965 * 2.0;
         auto SUB_3505 = 1.0 - MUL_3502;
         auto MUL_3523 = SUB_3505 * 0.022;
@@ -1299,12 +1305,12 @@ namespace vamp::robots::panda
         auto ADD_1234 = MUL_1232 + 0.0584;
         auto ADD_1237 = ADD_971 + ADD_1234;
         auto ADD_3529 = ADD_1237 + ADD_3526;
-        out.z[55] = ADD_3529;  // (948, 963)
+        out.z[55] = base_z + ADD_3529;  // (948, 963)
         auto MUL_3547 = SUB_3505 * 0.044;
         auto MUL_3541 = MUL_3492 * 0.008;
         auto ADD_3550 = MUL_3541 + MUL_3547;
         auto ADD_3553 = ADD_1237 + ADD_3550;
-        out.z[56] = ADD_3553;  // (963, 967)
+        out.z[56] = base_z + ADD_3553;  // (963, 967)
         auto ADD_1367 = MUL_1226 + MUL_1227;
         auto MUL_3598 = ADD_2965 * 2.0;
         auto SUB_3601 = 1.0 - MUL_3598;
@@ -1318,24 +1324,41 @@ namespace vamp::robots::panda
         auto SUB_1376 = 0.0584 - MUL_1373;
         auto ADD_1379 = ADD_971 + SUB_1376;
         auto ADD_3631 = ADD_1379 + SUB_3628;
-        out.z[57] = ADD_3631;  // (967, 980)
+        out.z[57] = base_z + ADD_3631;  // (967, 980)
         auto MUL_3655 = SUB_3601 * 0.044;
         auto MUL_3648 = MUL_3588 * 0.008;
         auto SUB_3658 = MUL_3655 - MUL_3648;
         auto ADD_3661 = ADD_1379 + SUB_3658;
-        out.z[58] = ADD_3661;  // (980, 984)
+        out.z[58] = base_z + ADD_3661;  // (980, 984)
     }
 
-    template <std::size_t rake>
+    template <std::size_t rake, int base_x100, int base_y100, int base_z100>
     inline bool interleaved_sphere_fk(
         const vamp::collision::Environment<FloatVector<rake>> &environment,
         const ConfigurationBlock<rake> &q) noexcept
     {
-        // Ignore static frame collisions - needed for some evaluation problems
-        // if (/*panda_link0*/ sphere_environment_in_collision(environment, 0.0, 0.0, 0.05, 0.08))
-        // {
-        //     return false;
-        // }  // (0, 0)
+
+        float base_x = static_cast<float>(base_x100) / 100.0f;
+        float base_y = static_cast<float>(base_y100) / 100.0f;
+        float base_z = static_cast<float>(base_z100) / 100.0f;
+
+        // Check base (link0) bounding sphere first
+        if (/*panda_link0*/ sphere_environment_in_collision(environment, 0.0 + base_x, 0.0 + base_y, 0.122 + base_z, 0.152))
+        {
+            // Check individual base spheres if bounding sphere is in collision
+            if (sphere_environment_in_collision(environment, 0.0 + base_x, 0.0 + base_y, 0.05 + base_z, 0.08))
+            {
+                return false;
+            }
+            if (sphere_environment_in_collision(environment, 0.0 + base_x, 0.0 + base_y, 0.213 + base_z, 0.06))
+            {
+                return false;
+            }
+            if (sphere_environment_in_collision(environment, 0.0 + base_x, 0.0 + base_y, 0.163 + base_z, 0.06))
+            {
+                return false;
+            }
+        }  // (0, 0)
         auto INPUT_0 = q[0];
         auto DIV_8 = INPUT_0 * 0.5;
         auto SIN_9 = DIV_8.sin();
@@ -1358,21 +1381,23 @@ namespace vamp::robots::panda
         auto MUL_1680 = MUL_1594 * 0.03;
         auto MUL_1683 = SUB_1587 * 0.03;
         auto NEGATE_1684 = -MUL_1683;
-        if (/*panda_link1*/ sphere_environment_in_collision(environment, SUB_1641, NEGATE_1643, 0.248, 0.154))
+        
+        if (/*panda_link1*/ sphere_environment_in_collision(environment, SUB_1641 + base_x, NEGATE_1643 + base_y, 0.248 + base_z, 0.154))
         {
-            if (sphere_environment_in_collision(environment, MUL_1656, NEGATE_1660, 0.333, 0.06))
+            
+            if (sphere_environment_in_collision(environment, MUL_1656 + base_x, NEGATE_1660 + base_y, 0.333 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, MUL_1680, NEGATE_1684, 0.333, 0.06))
+            if (sphere_environment_in_collision(environment, MUL_1680 + base_x, NEGATE_1684 + base_y, 0.333 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, 0.0, 0.0, 0.213, 0.06))
+            if (sphere_environment_in_collision(environment, 0 + base_x, 0 + base_y, 0.213f + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, 0.0, 0.0, 0.163, 0.06))
+            if (sphere_environment_in_collision(environment, 0 + base_x, 0 + base_y, 0.163f + base_z, 0.06))
             {
                 return false;
             }
@@ -1442,21 +1467,21 @@ namespace vamp::robots::panda
         auto NEGATE_1910 = -MUL_1909;
         auto MUL_1913 = MUL_1795 * 0.17;
         auto SUB_1921 = 0.333 - MUL_1913;
-        if (/*panda_link2*/ sphere_environment_in_collision(environment, ADD_1832, SUB_1833, ADD_1835, 0.154))
+        if (/*panda_link2*/ sphere_environment_in_collision(environment, ADD_1832 + base_x, SUB_1833 + base_y, ADD_1835 + base_z, 0.154))
         {
-            if (sphere_environment_in_collision(environment, MUL_1849, MUL_1851, ADD_1854, 0.06))
+            if (sphere_environment_in_collision(environment, MUL_1849 + base_x, MUL_1851 + base_y, ADD_1854 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, MUL_1868, MUL_1870, ADD_1873, 0.06))
+            if (sphere_environment_in_collision(environment, MUL_1868 + base_x, MUL_1870 + base_y, ADD_1873 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, MUL_1882, NEGATE_1886, SUB_1897, 0.06))
+            if (sphere_environment_in_collision(environment, MUL_1882 + base_x, NEGATE_1886 + base_y, SUB_1897 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, MUL_1906, NEGATE_1910, SUB_1921, 0.06))
+            if (sphere_environment_in_collision(environment, MUL_1906 + base_x, NEGATE_1910 + base_y, SUB_1921 + base_z, 0.06))
             {
                 return false;
             }
@@ -1582,21 +1607,21 @@ namespace vamp::robots::panda
         auto MUL_2102 = MUL_1966 * 0.02;
         auto ADD_2111 = MUL_2072 + MUL_2102;
         auto ADD_2114 = ADD_260 + ADD_2111;
-        if (/*panda_link3*/ sphere_environment_in_collision(environment, ADD_2010, ADD_2011, ADD_2012, 0.128))
+        if (/*panda_link3*/ sphere_environment_in_collision(environment, ADD_2010 + base_x, ADD_2011 + base_y, ADD_2012 + base_z, 0.128))
         {
-            if (sphere_environment_in_collision(environment, SUB_2037, SUB_2038, SUB_2039, 0.06))
+            if (sphere_environment_in_collision(environment, SUB_2037 + base_x, SUB_2038 + base_y, SUB_2039 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, SUB_2064, SUB_2065, SUB_2066, 0.05))
+            if (sphere_environment_in_collision(environment, SUB_2064 + base_x, SUB_2065 + base_y, SUB_2066 + base_z, 0.05))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2088, ADD_2089, ADD_2090, 0.055))
+            if (sphere_environment_in_collision(environment, ADD_2088 + base_x, ADD_2089 + base_y, ADD_2090 + base_z, 0.055))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2112, ADD_2113, ADD_2114, 0.055))
+            if (sphere_environment_in_collision(environment, ADD_2112 + base_x, ADD_2113 + base_y, ADD_2114 + base_z, 0.055))
             {
                 return false;
             }
@@ -1724,21 +1749,21 @@ namespace vamp::robots::panda
         auto MUL_2295 = MUL_2159 * 0.06;
         auto SUB_2304 = MUL_2295 - MUL_2216;
         auto ADD_2307 = ADD_405 + SUB_2304;
-        if (/*panda_link4*/ sphere_environment_in_collision(environment, ADD_2203, ADD_2204, ADD_2205, 0.126))
+        if (/*panda_link4*/ sphere_environment_in_collision(environment, ADD_2203 + base_x, ADD_2204 + base_y, ADD_2205 + base_z, 0.126))
         {
-            if (sphere_environment_in_collision(environment, ADD_2233, ADD_2234, ADD_2235, 0.06))
+            if (sphere_environment_in_collision(environment, ADD_2233 + base_x, ADD_2234 + base_y, ADD_2235 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2254, ADD_2255, ADD_2256, 0.055))
+            if (sphere_environment_in_collision(environment, ADD_2254 + base_x, ADD_2255 + base_y, ADD_2256 + base_z, 0.055))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2275, ADD_2276, ADD_2277, 0.055))
+            if (sphere_environment_in_collision(environment, ADD_2275 + base_x, ADD_2276 + base_y, ADD_2277 + base_z, 0.055))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2305, ADD_2306, ADD_2307, 0.055))
+            if (sphere_environment_in_collision(environment, ADD_2305 + base_x, ADD_2306 + base_y, ADD_2307 + base_z, 0.055))
             {
                 return false;
             }
@@ -2521,53 +2546,53 @@ namespace vamp::robots::panda
                 return false;
             }
         }  // (557, 557)
-        if (/*panda_link5*/ sphere_environment_in_collision(environment, ADD_2402, ADD_2403, ADD_2404, 0.176))
+        if (/*panda_link5*/ sphere_environment_in_collision(environment, ADD_2402 + base_x, ADD_2403 + base_y, ADD_2404 + base_z, 0.176))
         {
-            if (sphere_environment_in_collision(environment, ADD_2423, ADD_2424, ADD_2425, 0.06))
+            if (sphere_environment_in_collision(environment, ADD_2423 + base_x, ADD_2424 + base_y, ADD_2425 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2444, ADD_2445, ADD_2446, 0.06))
+            if (sphere_environment_in_collision(environment, ADD_2444 + base_x, ADD_2445 + base_y, ADD_2446 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, SUB_2471, SUB_2472, SUB_2473, 0.06))
+            if (sphere_environment_in_collision(environment, SUB_2471 + base_x, SUB_2472 + base_y, SUB_2473 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2501, ADD_2502, ADD_2503, 0.05))
+            if (sphere_environment_in_collision(environment, ADD_2501 + base_x, ADD_2502 + base_y, ADD_2503 + base_z, 0.05))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2534, ADD_2535, ADD_2536, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_2534 + base_x, ADD_2535 + base_y, ADD_2536 + base_z, 0.025))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2567, ADD_2568, ADD_2569, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_2567 + base_x, ADD_2568 + base_y, ADD_2569 + base_z, 0.025))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2600, ADD_2601, ADD_2602, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_2600 + base_x, ADD_2601 + base_y, ADD_2602 + base_z, 0.025))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2633, ADD_2634, ADD_2635, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_2633 + base_x, ADD_2634 + base_y, ADD_2635 + base_z, 0.025))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2672, ADD_2673, ADD_2674, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_2672 + base_x, ADD_2673 + base_y, ADD_2674 + base_z, 0.025))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2711, ADD_2712, ADD_2713, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_2711 + base_x, ADD_2712 + base_y, ADD_2713 + base_z, 0.025))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2750, ADD_2751, ADD_2752, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_2750 + base_x, ADD_2751 + base_y, ADD_2752 + base_z, 0.025))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2789, ADD_2790, ADD_2791, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_2789 + base_x, ADD_2790 + base_y, ADD_2791 + base_z, 0.025))
             {
                 return false;
             }
@@ -2735,17 +2760,17 @@ namespace vamp::robots::panda
                 return false;
             }
         }  // (637, 637)
-        if (/*panda_link6*/ sphere_environment_in_collision(environment, ADD_2887, ADD_2888, ADD_2889, 0.095))
+        if (/*panda_link6*/ sphere_environment_in_collision(environment, ADD_2887 + base_x, ADD_2888 + base_y, ADD_2889 + base_z, 0.095))
         {
-            if (sphere_environment_in_collision(environment, ADD_564, ADD_565, ADD_566, 0.05))
+            if (sphere_environment_in_collision(environment, ADD_564 + base_x, ADD_565 + base_y, ADD_566 + base_z, 0.05))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2935, ADD_2936, ADD_2937, 0.05))
+            if (sphere_environment_in_collision(environment, ADD_2935 + base_x, ADD_2936 + base_y, ADD_2937 + base_z, 0.05))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2959, ADD_2960, ADD_2961, 0.052))
+            if (sphere_environment_in_collision(environment, ADD_2959 + base_x, ADD_2960 + base_y, ADD_2961 + base_z, 0.052))
             {
                 return false;
             }
@@ -3447,25 +3472,25 @@ namespace vamp::robots::panda
                 return false;
             }
         }  // (793, 793)
-        if (/*panda_link7*/ sphere_environment_in_collision(environment, ADD_3042, ADD_3043, ADD_3044, 0.072))
+        if (/*panda_link7*/ sphere_environment_in_collision(environment, ADD_3042 + base_x, ADD_3043 + base_y, ADD_3044 + base_z, 0.072))
         {
-            if (sphere_environment_in_collision(environment, ADD_3063, ADD_3064, ADD_3065, 0.05))
+            if (sphere_environment_in_collision(environment, ADD_3063 + base_x, ADD_3064 + base_y, ADD_3065 + base_z, 0.05))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3090, ADD_3091, ADD_3092, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_3090 + base_x, ADD_3091 + base_y, ADD_3092 + base_z, 0.025))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3117, ADD_3118, ADD_3119, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_3117 + base_x, ADD_3118 + base_y, ADD_3119 + base_z, 0.025))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3144, ADD_3145, ADD_3146, 0.02))
+            if (sphere_environment_in_collision(environment, ADD_3144 + base_x, ADD_3145 + base_y, ADD_3146 + base_z, 0.02))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3171, ADD_3172, ADD_3173, 0.02))
+            if (sphere_environment_in_collision(environment, ADD_3171 + base_x, ADD_3172 + base_y, ADD_3173 + base_z, 0.02))
             {
                 return false;
             }
@@ -3655,77 +3680,77 @@ namespace vamp::robots::panda
         auto ADD_3787 = ADD_970 + ADD_3784;
         auto ADD_3785 = MUL_3319 + MUL_3650;
         auto ADD_3788 = ADD_971 + ADD_3785;
-        if (/*panda_hand*/ sphere_environment_in_collision(environment, ADD_3300, ADD_3301, ADD_3302, 0.104))
+        if (/*panda_hand*/ sphere_environment_in_collision(environment, ADD_3300 + base_x, ADD_3301 + base_y, ADD_3302 + base_z, 0.104))
         {
-            if (sphere_environment_in_collision(environment, ADD_3330, ADD_3331, ADD_3332, 0.028))
+            if (sphere_environment_in_collision(environment, ADD_3330 + base_x, ADD_3331 + base_y, ADD_3332 + base_z, 0.028))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3360, ADD_3361, ADD_3362, 0.028))
+            if (sphere_environment_in_collision(environment, ADD_3360 + base_x, ADD_3361 + base_y, ADD_3362 + base_z, 0.028))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3390, ADD_3391, ADD_3392, 0.028))
+            if (sphere_environment_in_collision(environment, ADD_3390 + base_x, ADD_3391 + base_y, ADD_3392 + base_z, 0.028))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3414, ADD_3415, ADD_3416, 0.028))
+            if (sphere_environment_in_collision(environment, ADD_3414 + base_x, ADD_3415 + base_y, ADD_3416 + base_z, 0.028))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3438, ADD_3439, ADD_3440, 0.028))
+            if (sphere_environment_in_collision(environment, ADD_3438 + base_x, ADD_3439 + base_y, ADD_3440 + base_z, 0.028))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3462, ADD_3463, ADD_3464, 0.028))
+            if (sphere_environment_in_collision(environment, ADD_3462 + base_x, ADD_3463 + base_y, ADD_3464 + base_z, 0.028))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3492, ADD_3493, ADD_3494, 0.026))
+            if (sphere_environment_in_collision(environment, ADD_3492 + base_x, ADD_3493 + base_y, ADD_3494 + base_z, 0.026))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3522, ADD_3523, ADD_3524, 0.026))
+            if (sphere_environment_in_collision(environment, ADD_3522 + base_x, ADD_3523 + base_y, ADD_3524 + base_z, 0.026))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3552, ADD_3553, ADD_3554, 0.026))
+            if (sphere_environment_in_collision(environment, ADD_3552 + base_x, ADD_3553 + base_y, ADD_3554 + base_z, 0.026))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3576, ADD_3577, ADD_3578, 0.026))
+            if (sphere_environment_in_collision(environment, ADD_3576 + base_x, ADD_3577 + base_y, ADD_3578 + base_z, 0.026))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3600, ADD_3601, ADD_3602, 0.026))
+            if (sphere_environment_in_collision(environment, ADD_3600 + base_x, ADD_3601 + base_y, ADD_3602 + base_z, 0.026))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3624, ADD_3625, ADD_3626, 0.026))
+            if (sphere_environment_in_collision(environment, ADD_3624 + base_x, ADD_3625 + base_y, ADD_3626 + base_z, 0.026))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3654, ADD_3655, ADD_3656, 0.024))
+            if (sphere_environment_in_collision(environment, ADD_3654 + base_x, ADD_3655 + base_y, ADD_3656 + base_z, 0.024))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3684, ADD_3685, ADD_3686, 0.024))
+            if (sphere_environment_in_collision(environment, ADD_3684 + base_x, ADD_3685 + base_y, ADD_3686 + base_z, 0.024))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3714, ADD_3715, ADD_3716, 0.024))
+            if (sphere_environment_in_collision(environment, ADD_3714 + base_x, ADD_3715 + base_y, ADD_3716 + base_z, 0.024))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3738, ADD_3739, ADD_3740, 0.024))
+            if (sphere_environment_in_collision(environment, ADD_3738 + base_x, ADD_3739 + base_y, ADD_3740 + base_z, 0.024))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3762, ADD_3763, ADD_3764, 0.024))
+            if (sphere_environment_in_collision(environment, ADD_3762 + base_x, ADD_3763 + base_y, ADD_3764 + base_z, 0.024))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3786, ADD_3787, ADD_3788, 0.024))
+            if (sphere_environment_in_collision(environment, ADD_3786 + base_x, ADD_3787 + base_y, ADD_3788 + base_z, 0.024))
             {
                 return false;
             }
@@ -5711,11 +5736,11 @@ namespace vamp::robots::panda
         if (/*panda_leftfinger*/ sphere_environment_in_collision(
             environment, ADD_3896, ADD_3897, ADD_3898, 0.024))
         {
-            if (sphere_environment_in_collision(environment, ADD_3920, ADD_3921, ADD_3922, 0.012))
+            if (sphere_environment_in_collision(environment, ADD_3920 + base_x, ADD_3921 + base_y, ADD_3922 + base_z, 0.012))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3944, ADD_3945, ADD_3946, 0.012))
+            if (sphere_environment_in_collision(environment, ADD_3944 + base_x, ADD_3945 + base_y, ADD_3946 + base_z, 0.012))
             {
                 return false;
             }
@@ -6237,11 +6262,11 @@ namespace vamp::robots::panda
         if (/*panda_rightfinger*/ sphere_environment_in_collision(
             environment, ADD_4028, ADD_4029, ADD_4030, 0.024))
         {
-            if (sphere_environment_in_collision(environment, ADD_4058, ADD_4059, ADD_4060, 0.012))
+            if (sphere_environment_in_collision(environment, ADD_4058 + base_x, ADD_4059 + base_y, ADD_4060 + base_z, 0.012))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_4088, ADD_4089, ADD_4090, 0.012))
+            if (sphere_environment_in_collision(environment, ADD_4088 + base_x, ADD_4089 + base_y, ADD_4090 + base_z, 0.012))
             {
                 return false;
             }
@@ -6250,14 +6275,35 @@ namespace vamp::robots::panda
         return true;
     }
 
-    template <std::size_t rake>
+    template <std::size_t rake, int base_x100, int base_y100, int base_z100>
     inline bool interleaved_sphere_fk_attachment(
         const vamp::collision::Environment<FloatVector<rake>> &environment,
         const ConfigurationBlock<rake> &q) noexcept
     {
-        // ignore collision of static link
-        // if(/*panda_link0*/ sphere_environment_in_collision(environment, 0.0, 0.0, 0.05, 0.08)){ return
-        // false; } // (0, 0)
+
+        float base_x = static_cast<float>(base_x100) / 100.0f;
+        float base_y = static_cast<float>(base_y100) / 100.0f;
+        float base_z = static_cast<float>(base_z100) / 100.0f;
+
+        // Check collision of static link
+        // Check base (link0) bounding sphere first
+        if (/*panda_link0*/ sphere_environment_in_collision(environment, 0.0 + base_x, 0.0 + base_y, 0.122 + base_z, 0.152))
+        {
+            // Check individual base spheres if bounding sphere is in collision
+            if (sphere_environment_in_collision(environment, 0.0 + base_x, 0.0 + base_y, 0.05 + base_z, 0.08))
+            {
+                return false;
+            }
+            if (sphere_environment_in_collision(environment, 0.0 + base_x, 0.0 + base_y, 0.213 + base_z, 0.06))
+            {
+                return false;
+            }
+            if (sphere_environment_in_collision(environment, 0.0 + base_x, 0.0 + base_y, 0.163 + base_z, 0.06))
+            {
+                return false;
+            }
+        }  // (0, 0)
+
         auto INPUT_0 = q[0];
         auto DIV_8 = INPUT_0 * 0.5;
         auto SIN_9 = DIV_8.sin();
@@ -6282,19 +6328,19 @@ namespace vamp::robots::panda
         if (/*panda_link1*/ sphere_environment_in_collision(
             environment, ADD_1636, SUB_1637, 0.2598976, 0.144259))
         {
-            if (sphere_environment_in_collision(environment, MUL_1650, NEGATE_1654, 0.333, 0.06))
+            if (sphere_environment_in_collision(environment, MUL_1650 + base_x, NEGATE_1654 + base_y, 0.333 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, MUL_1674, NEGATE_1678, 0.333, 0.06))
+            if (sphere_environment_in_collision(environment, MUL_1674 + base_x, NEGATE_1678 + base_y, 0.333 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, 0.0, 0.0, 0.213, 0.06))
+            if (sphere_environment_in_collision(environment, 0 + base_x, 0 + base_y, 0.213f + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, 0.0, 0.0, 0.163, 0.06))
+            if (sphere_environment_in_collision(environment, 0 + base_x, 0 + base_y, 0.163f + base_z, 0.06))
             {
                 return false;
             }
@@ -6380,19 +6426,19 @@ namespace vamp::robots::panda
         if (/*panda_link2*/ sphere_environment_in_collision(
             environment, ADD_1835, SUB_1836, ADD_1838, 0.145067))
         {
-            if (sphere_environment_in_collision(environment, MUL_1852, MUL_1854, ADD_1857, 0.06))
+            if (sphere_environment_in_collision(environment, MUL_1852 + base_x, MUL_1854 + base_y, ADD_1857 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, MUL_1871, MUL_1873, ADD_1876, 0.06))
+            if (sphere_environment_in_collision(environment, MUL_1871 + base_x, MUL_1873 + base_y, ADD_1876 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, MUL_1885, NEGATE_1889, SUB_1900, 0.06))
+            if (sphere_environment_in_collision(environment, MUL_1885 + base_x, NEGATE_1889 + base_y, SUB_1900 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, MUL_1909, NEGATE_1913, SUB_1924, 0.06))
+            if (sphere_environment_in_collision(environment, MUL_1909 + base_x, NEGATE_1913 + base_y, SUB_1924 + base_z, 0.06))
             {
                 return false;
             }
@@ -6521,19 +6567,19 @@ namespace vamp::robots::panda
         if (/*panda_link3*/ sphere_environment_in_collision(
             environment, ADD_2013, ADD_2014, ADD_2015, 0.127656))
         {
-            if (sphere_environment_in_collision(environment, SUB_2040, SUB_2041, SUB_2042, 0.06))
+            if (sphere_environment_in_collision(environment, SUB_2040 + base_x, SUB_2041 + base_y, SUB_2042 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, SUB_2067, SUB_2068, SUB_2069, 0.05))
+            if (sphere_environment_in_collision(environment, SUB_2067 + base_x, SUB_2068 + base_y, SUB_2069 + base_z, 0.05))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2091, ADD_2092, ADD_2093, 0.055))
+            if (sphere_environment_in_collision(environment, ADD_2091 + base_x, ADD_2092 + base_y, ADD_2093 + base_z, 0.055))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2115, ADD_2116, ADD_2117, 0.055))
+            if (sphere_environment_in_collision(environment, ADD_2115 + base_x, ADD_2116 + base_y, ADD_2117 + base_z, 0.055))
             {
                 return false;
             }
@@ -6664,19 +6710,19 @@ namespace vamp::robots::panda
         if (/*panda_link4*/ sphere_environment_in_collision(
             environment, ADD_2206, ADD_2207, ADD_2208, 0.12849))
         {
-            if (sphere_environment_in_collision(environment, ADD_2236, ADD_2237, ADD_2238, 0.06))
+            if (sphere_environment_in_collision(environment, ADD_2236 + base_x, ADD_2237 + base_y, ADD_2238 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2257, ADD_2258, ADD_2259, 0.055))
+            if (sphere_environment_in_collision(environment, ADD_2257 + base_x, ADD_2258 + base_y, ADD_2259 + base_z, 0.055))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2278, ADD_2279, ADD_2280, 0.055))
+            if (sphere_environment_in_collision(environment, ADD_2278 + base_x, ADD_2279 + base_y, ADD_2280 + base_z, 0.055))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2308, ADD_2309, ADD_2310, 0.055))
+            if (sphere_environment_in_collision(environment, ADD_2308 + base_x, ADD_2309 + base_y, ADD_2310 + base_z, 0.055))
             {
                 return false;
             }
@@ -7465,51 +7511,51 @@ namespace vamp::robots::panda
         if (/*panda_link5*/ sphere_environment_in_collision(
             environment, ADD_2399, ADD_2400, ADD_2401, 0.173531))
         {
-            if (sphere_environment_in_collision(environment, ADD_2420, ADD_2421, ADD_2422, 0.06))
+            if (sphere_environment_in_collision(environment, ADD_2420 + base_x, ADD_2421 + base_y, ADD_2422 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2441, ADD_2442, ADD_2443, 0.06))
+            if (sphere_environment_in_collision(environment, ADD_2441 + base_x, ADD_2442 + base_y, ADD_2443 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, SUB_2468, SUB_2469, SUB_2470, 0.06))
+            if (sphere_environment_in_collision(environment, SUB_2468 + base_x, SUB_2469 + base_y, SUB_2470 + base_z, 0.06))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2498, ADD_2499, ADD_2500, 0.05))
+            if (sphere_environment_in_collision(environment, ADD_2498 + base_x, ADD_2499 + base_y, ADD_2500 + base_z, 0.05))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2531, ADD_2532, ADD_2533, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_2531 + base_x, ADD_2532 + base_y, ADD_2533 + base_z, 0.025))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2564, ADD_2565, ADD_2566, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_2564 + base_x, ADD_2565 + base_y, ADD_2566 + base_z, 0.025))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2597, ADD_2598, ADD_2599, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_2597 + base_x, ADD_2598 + base_y, ADD_2599 + base_z, 0.025))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2630, ADD_2631, ADD_2632, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_2630 + base_x, ADD_2631 + base_y, ADD_2632 + base_z, 0.025))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2669, ADD_2670, ADD_2671, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_2669 + base_x, ADD_2670 + base_y, ADD_2671 + base_z, 0.025))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2708, ADD_2709, ADD_2710, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_2708 + base_x, ADD_2709 + base_y, ADD_2710 + base_z, 0.025))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2747, ADD_2748, ADD_2749, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_2747 + base_x, ADD_2748 + base_y, ADD_2749 + base_z, 0.025))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2786, ADD_2787, ADD_2788, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_2786 + base_x, ADD_2787 + base_y, ADD_2788 + base_z, 0.025))
             {
                 return false;
             }
@@ -7693,15 +7739,15 @@ namespace vamp::robots::panda
         if (/*panda_link6*/ sphere_environment_in_collision(
             environment, ADD_2887, ADD_2888, ADD_2889, 0.104795))
         {
-            if (sphere_environment_in_collision(environment, ADD_564, ADD_565, ADD_566, 0.05))
+            if (sphere_environment_in_collision(environment, ADD_564 + base_x, ADD_565 + base_y, ADD_566 + base_z, 0.05))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2935, ADD_2936, ADD_2937, 0.05))
+            if (sphere_environment_in_collision(environment, ADD_2935 + base_x, ADD_2936 + base_y, ADD_2937 + base_z, 0.05))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_2959, ADD_2960, ADD_2961, 0.052))
+            if (sphere_environment_in_collision(environment, ADD_2959 + base_x, ADD_2960 + base_y, ADD_2961 + base_z, 0.052))
             {
                 return false;
             }
@@ -8406,23 +8452,23 @@ namespace vamp::robots::panda
         if (/*panda_link7*/ sphere_environment_in_collision(
             environment, ADD_3042, ADD_3043, ADD_3044, 0.073242))
         {
-            if (sphere_environment_in_collision(environment, ADD_3063, ADD_3064, ADD_3065, 0.05))
+            if (sphere_environment_in_collision(environment, ADD_3063 + base_x, ADD_3064 + base_y, ADD_3065 + base_z, 0.05))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3090, ADD_3091, ADD_3092, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_3090 + base_x, ADD_3091 + base_y, ADD_3092 + base_z, 0.025))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3117, ADD_3118, ADD_3119, 0.025))
+            if (sphere_environment_in_collision(environment, ADD_3117 + base_x, ADD_3118 + base_y, ADD_3119 + base_z, 0.025))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3144, ADD_3145, ADD_3146, 0.02))
+            if (sphere_environment_in_collision(environment, ADD_3144 + base_x, ADD_3145 + base_y, ADD_3146 + base_z, 0.02))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3171, ADD_3172, ADD_3173, 0.02))
+            if (sphere_environment_in_collision(environment, ADD_3171 + base_x, ADD_3172 + base_y, ADD_3173 + base_z, 0.02))
             {
                 return false;
             }
@@ -8634,75 +8680,75 @@ namespace vamp::robots::panda
         if (/*panda_hand*/ sphere_environment_in_collision(
             environment, ADD_3312, ADD_3313, ADD_3314, 0.107701))
         {
-            if (sphere_environment_in_collision(environment, ADD_3342, ADD_3343, ADD_3344, 0.028))
+            if (sphere_environment_in_collision(environment, ADD_3342 + base_x, ADD_3343 + base_y, ADD_3344 + base_z, 0.028))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3372, ADD_3373, ADD_3374, 0.028))
+            if (sphere_environment_in_collision(environment, ADD_3372 + base_x, ADD_3373 + base_y, ADD_3374 + base_z, 0.028))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3402, ADD_3403, ADD_3404, 0.028))
+            if (sphere_environment_in_collision(environment, ADD_3402 + base_x, ADD_3403 + base_y, ADD_3404 + base_z, 0.028))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3426, ADD_3427, ADD_3428, 0.028))
+            if (sphere_environment_in_collision(environment, ADD_3426 + base_x, ADD_3427 + base_y, ADD_3428 + base_z, 0.028))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3450, ADD_3451, ADD_3452, 0.028))
+            if (sphere_environment_in_collision(environment, ADD_3450 + base_x, ADD_3451 + base_y, ADD_3452 + base_z, 0.028))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3474, ADD_3475, ADD_3476, 0.028))
+            if (sphere_environment_in_collision(environment, ADD_3474 + base_x, ADD_3475 + base_y, ADD_3476 + base_z, 0.028))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3504, ADD_3505, ADD_3506, 0.026))
+            if (sphere_environment_in_collision(environment, ADD_3504 + base_x, ADD_3505 + base_y, ADD_3506 + base_z, 0.026))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3534, ADD_3535, ADD_3536, 0.026))
+            if (sphere_environment_in_collision(environment, ADD_3534 + base_x, ADD_3535 + base_y, ADD_3536 + base_z, 0.026))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3564, ADD_3565, ADD_3566, 0.026))
+            if (sphere_environment_in_collision(environment, ADD_3564 + base_x, ADD_3565 + base_y, ADD_3566 + base_z, 0.026))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3588, ADD_3589, ADD_3590, 0.026))
+            if (sphere_environment_in_collision(environment, ADD_3588 + base_x, ADD_3589 + base_y, ADD_3590 + base_z, 0.026))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3612, ADD_3613, ADD_3614, 0.026))
+            if (sphere_environment_in_collision(environment, ADD_3612 + base_x, ADD_3613 + base_y, ADD_3614 + base_z, 0.026))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3636, ADD_3637, ADD_3638, 0.026))
+            if (sphere_environment_in_collision(environment, ADD_3636 + base_x, ADD_3637 + base_y, ADD_3638 + base_z, 0.026))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3666, ADD_3667, ADD_3668, 0.024))
+            if (sphere_environment_in_collision(environment, ADD_3666 + base_x, ADD_3667 + base_y, ADD_3668 + base_z, 0.024))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3696, ADD_3697, ADD_3698, 0.024))
+            if (sphere_environment_in_collision(environment, ADD_3696 + base_x, ADD_3697 + base_y, ADD_3698 + base_z, 0.024))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3726, ADD_3727, ADD_3728, 0.024))
+            if (sphere_environment_in_collision(environment, ADD_3726 + base_x, ADD_3727 + base_y, ADD_3728 + base_z, 0.024))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3750, ADD_3751, ADD_3752, 0.024))
+            if (sphere_environment_in_collision(environment, ADD_3750 + base_x, ADD_3751 + base_y, ADD_3752 + base_z, 0.024))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3774, ADD_3775, ADD_3776, 0.024))
+            if (sphere_environment_in_collision(environment, ADD_3774 + base_x, ADD_3775 + base_y, ADD_3776 + base_z, 0.024))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3798, ADD_3799, ADD_3800, 0.024))
+            if (sphere_environment_in_collision(environment, ADD_3798 + base_x, ADD_3799 + base_y, ADD_3800 + base_z, 0.024))
             {
                 return false;
             }
@@ -10698,11 +10744,11 @@ namespace vamp::robots::panda
         if (/*panda_leftfinger*/ sphere_environment_in_collision(
             environment, ADD_3917, ADD_3918, ADD_3919, 0.031022))
         {
-            if (sphere_environment_in_collision(environment, ADD_3941, ADD_3942, ADD_3943, 0.012))
+            if (sphere_environment_in_collision(environment, ADD_3941 + base_x, ADD_3942 + base_y, ADD_3943 + base_z, 0.012))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_3965, ADD_3966, ADD_3967, 0.012))
+            if (sphere_environment_in_collision(environment, ADD_3965 + base_x, ADD_3966 + base_y, ADD_3967 + base_z, 0.012))
             {
                 return false;
             }
@@ -11234,11 +11280,11 @@ namespace vamp::robots::panda
         if (/*panda_rightfinger*/ sphere_environment_in_collision(
             environment, ADD_4052, ADD_4053, ADD_4054, 0.031022))
         {
-            if (sphere_environment_in_collision(environment, ADD_4082, ADD_4083, ADD_4084, 0.012))
+            if (sphere_environment_in_collision(environment, ADD_4082 + base_x, ADD_4083 + base_y, ADD_4084 + base_z, 0.012))
             {
                 return false;
             }
-            if (sphere_environment_in_collision(environment, ADD_4112, ADD_4113, ADD_4114, 0.012))
+            if (sphere_environment_in_collision(environment, ADD_4112 + base_x, ADD_4113 + base_y, ADD_4114 + base_z, 0.012))
             {
                 return false;
             }

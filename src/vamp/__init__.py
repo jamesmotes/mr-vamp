@@ -2,7 +2,6 @@ __all__ = [
     "AnyPlanningResult",
     "png_to_heightfield",
     "configure_robot_and_planner_with_kwargs",
-    "configure_multi_robot_and_planner_with_kwargs",
     "problem_dict_to_vamp",
     "results_to_dict",
     "sphere",
@@ -10,7 +9,6 @@ __all__ = [
     "panda",
     "fetch",
     "baxter",
-    "mr_planning",
     "Environment",
     "Attachment",
     "Sphere",
@@ -54,7 +52,6 @@ from ._core import panda as panda
 from ._core import sphere as sphere
 from ._core import ur5 as ur5
 from ._core import filter_pointcloud as filter_pointcloud
-from ._core import mr_planning as mr_planning
 
 AnyPlanningResult = Union[
     sphere.PlanningResult,
@@ -133,47 +130,6 @@ def configure_robot_and_planner_with_kwargs(robot_name: str, planner_name: str, 
                 setattr(sub_setting, sk, v)
 
     return robot_module, planner_func, plan_settings, simp_settings
-
-
-def configure_multi_robot_and_planner_with_kwargs(robot_name: str, planner_name: str, base_positions: List[Tuple[float, float, float]], **kwargs):
-    """
-    Configure robot and planner for multi-robot scenarios.
-    
-    Args:
-        robot_name: Name of the robot (e.g., "panda")
-        planner_name: Name of the planner (e.g., "rrtc")
-        base_positions: List of (x, y, z) base positions for each robot
-        **kwargs: Additional planner and simplification settings
-    
-    Returns:
-        Tuple of (robot_module, planner_func, plan_settings, simp_settings, base_positions)
-        The base_positions are returned for use in visualization
-    """
-    # Extract base_positions from kwargs if not provided directly
-    if not base_positions and 'base_positions' in kwargs:
-        base_positions = kwargs.pop('base_positions')
-    
-    # Use the standard configuration function
-    robot_module, planner_func, plan_settings, simp_settings = configure_robot_and_planner_with_kwargs(
-        robot_name, planner_name, **kwargs
-    )
-    
-    # Validate base positions
-    if not base_positions:
-        raise ValueError("base_positions must be provided")
-    
-    # Convert to list of tuples if needed
-    if isinstance(base_positions, (list, tuple)) and len(base_positions) > 0:
-        if isinstance(base_positions[0], (list, tuple)):
-            # Already in correct format
-            pass
-        else:
-            # Single position provided, wrap in list
-            base_positions = [tuple(base_positions)]
-    
-    print(f"Multi-robot configuration: {len(base_positions)} robots at positions {base_positions}")
-    
-    return robot_module, planner_func, plan_settings, simp_settings, base_positions
 
 
 def problem_dict_to_vamp(

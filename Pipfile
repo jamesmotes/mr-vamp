@@ -1,0 +1,11 @@
+ [packages]
+ fire = "*"
+ pybullet = "*"
+ pyyaml = "*"
+ tqdm = "*"
+ pandas = "*"
+ tabulate = "*"
+ xmltodict = "*"
+vamp = {file = ".", editable = true}
+
+[dev-packages]

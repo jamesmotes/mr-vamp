@@ -44,15 +44,31 @@ namespace vamp::robots
         template <std::size_t rake>
         static constexpr auto descale_configuration_block = panda::descale_configuration_block<rake>;
 
+        // Convert base position from integer template parameters to float
+        static constexpr float base_x = static_cast<float>(BaseX100) / 100.0f;
+        static constexpr float base_y = static_cast<float>(BaseY100) / 100.0f;
+        static constexpr float base_z = static_cast<float>(BaseZ100) / 100.0f;
+
+        // Use static member function templates instead of function pointers
         template <std::size_t rake>
-        static constexpr auto fkcc = panda::interleaved_sphere_fk<rake>;
+        static constexpr bool fkcc(const vamp::collision::Environment<FloatVector<rake>>& environment,
+                                  const ConfigurationBlock<rake>& q) noexcept
+        {
+            return panda::interleaved_sphere_fk<rake, BaseX100, BaseY100, BaseZ100>(environment, q);
+        }
 
         template <std::size_t rake>
-        static constexpr auto fkcc_attach = panda::interleaved_sphere_fk_attachment<rake>;
+        static constexpr bool fkcc_attach(const vamp::collision::Environment<FloatVector<rake>>& environment,
+                                         const ConfigurationBlock<rake>& q) noexcept
+        {
+            return panda::interleaved_sphere_fk_attachment<rake, BaseX100, BaseY100, BaseZ100>(environment, q);
+        }
 
-        // Use the original FK functions directly
         template <std::size_t rake>
-        static constexpr auto sphere_fk = panda::sphere_fk<rake>;
+        static constexpr void sphere_fk(const ConfigurationBlock<rake>& q, Spheres<rake>& out) noexcept
+        {
+            panda::sphere_fk<rake, BaseX100, BaseY100, BaseZ100>(q, out);
+        }
 
         static constexpr auto eefk = panda::eefk;
     };

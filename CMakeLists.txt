@@ -139,6 +139,10 @@ if(VAMP_BUILD_CPP_DEMO)
   add_executable(vamp_test_panda_fk scripts/cpp/test_panda_fk.cc)
   target_link_libraries(vamp_test_panda_fk PRIVATE Eigen3::Eigen)
   target_include_directories(vamp_test_panda_fk SYSTEM PRIVATE ${VAMP_EXT_INCLUDES})
+
+  add_executable(vamp_benchmark_collision_checks scripts/cpp/benchmark_collision_checks.cc)
+  target_link_libraries(vamp_benchmark_collision_checks PRIVATE Eigen3::Eigen)
+  target_include_directories(vamp_benchmark_collision_checks SYSTEM PRIVATE ${VAMP_EXT_INCLUDES})
 endif()
 
 if(VAMP_BUILD_OMPL_DEMO)

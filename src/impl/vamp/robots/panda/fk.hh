@@ -61,7 +61,7 @@ namespace vamp::robots::panda
         q = (q - d_s) * d_m;
     }
 
-    template <std::size_t rake, float base_x, float base_y, float base_z>
+    template <std::size_t rake>
     inline void scale_configuration_block(ConfigurationBlock<rake> &q) noexcept
     {
         q[0] = -2.9671f + (q[0] * 5.9342f);
@@ -73,7 +73,7 @@ namespace vamp::robots::panda
         q[6] = -2.9671f + (q[6] * 5.9342f);
     }
 
-    template <std::size_t rake, float base_x, float base_y, float base_z>
+    template <std::size_t rake>
     inline void descale_configuration_block(ConfigurationBlock<rake> &q) noexcept
     {
         q[0] = 0.1685147113342995f * (q[0] - -2.9671f);

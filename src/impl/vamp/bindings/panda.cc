@@ -1,6 +1,6 @@
 #include <vamp/bindings/common.hh>
 #include <vamp/bindings/init.hh>
-#include <vamp/robots/panda.hh>
+#include <vamp/robots/panda_grid.hh>
 
 void vamp::binding::init_panda(nanobind::module_ &pymodule)
 {
